@@ -105,6 +105,31 @@ tr.is-weekend .cell-input, tr.is-weekend .kat-sel { opacity: 0.35; }
   nav button { padding: 8px 10px; font-size: 12px; }
   .grid-table th.th-ma { min-width: 130px; }
 }
+
+/* ─── Rotationsplan ──────────────────────────────────────── */
+.gen-bar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--white); padding:12px 18px; border-radius:8px; border:1px solid var(--border); margin-bottom:14px; }
+.gen-bar label { font-size:12px; font-weight:700; color:var(--blue); }
+.gen-bar input[type=number] { width:64px; border:1px solid var(--border); border-radius:4px; padding:5px 8px; font-size:13px; background:var(--white); color:var(--text); }
+.gen-bar select { border:1px solid var(--border); border-radius:4px; padding:5px 8px; font-size:13px; background:var(--white); color:var(--text); }
+.rot-table { border-collapse:collapse; min-width:860px; width:100%; }
+.rot-table th { background:var(--blue); color:white; padding:8px 6px; font-size:12px; text-align:center; white-space:nowrap; position:sticky; top:0; z-index:10; }
+.rot-table th.th-l { text-align:left; padding-left:10px; }
+.rot-table td { border-bottom:1px solid var(--border); padding:5px 5px; vertical-align:middle; }
+tr.rot-overlap td { background:#221800 !important; }
+tr.rot-ratten td { background:#1a2200 !important; }
+tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; font-weight:700; padding:3px 10px; border-top:2px solid #252e3e; }
+.kw-cell { font-size:13px; font-weight:700; color:var(--blue-light); min-width:42px; }
+.dates-cell { font-size:11px; color:var(--muted); white-space:nowrap; min-width:105px; }
+.block-cell { font-size:12px; font-weight:700; text-align:center; min-width:68px; color:var(--muted); }
+.rot-ma-cell { text-align:center; min-width:78px; cursor:pointer; user-select:none; padding:4px 3px; }
+.rot-ma-cell:hover { filter:brightness(1.2); }
+.st-badge { display:inline-block; border-radius:4px; padding:3px 8px; font-size:11px; font-weight:700; min-width:62px; text-align:center; }
+.st-w { background:var(--green); color:#071a0a; }
+.st-u { background:#e07a1c; color:#1a0800; }
+.st-r { background:#d4d400; color:#111100; }
+.st-f { background:#2c3543; color:#8a96a8; }
+.st-v { background:#1e4a6b; color:#a0ccee; }
+.ratten-cell { text-align:center; font-size:11px; font-weight:700; color:#c8c800; min-width:70px; }
 </style>
 </head>
 <body>
@@ -119,6 +144,7 @@ tr.is-weekend .cell-input, tr.is-weekend .kat-sel { opacity: 0.35; }
 
 <nav>
   <button class="active" onclick="showSection('plan', this)">📅 Monatsplan</button>
+  <button onclick="showSection('rotation', this)">🔄 Rotationsplan</button>
   <button onclick="showSection('uebersicht', this)">📋 Übersicht</button>
 </nav>
 
@@ -152,6 +178,50 @@ tr.is-weekend .cell-input, tr.is-weekend .kat-sel { opacity: 0.35; }
       <table class="grid-table" id="gridTable">
         <thead id="gridHead"></thead>
         <tbody id="gridBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ROTATIONSPLAN ===== -->
+<div id="sec-rotation" class="section">
+
+  <div class="gen-bar">
+    <label>Jahr:</label>
+    <select id="genYear" onchange="renderRotation()">
+      <option value="2026" selected>2026</option>
+      <option value="2025">2025</option>
+    </select>
+    <label>Start-KW:</label>
+    <input type="number" id="genStartKW" min="1" max="52" value="1">
+    <label>Erster Ratten-Dienst:</label>
+    <select id="genRattenStart">
+      <option value="C">Christian Leyener</option>
+      <option value="T">Thorsten Nitschke</option>
+    </select>
+    <button class="btn btn-green" onclick="autoGenRotation()">⚡ Auto-Generieren</button>
+    <button class="btn btn-ghost btn-sm" onclick="clearRotation()">🗑 Zurücksetzen</button>
+    <span style="font-size:11px;color:var(--muted);">→ Auf Zelle klicken = Status wechseln</span>
+    <span id="rotSyncStatus" style="margin-left:auto;font-size:11px;color:var(--muted);"></span>
+  </div>
+
+  <div class="legend-bar">
+    <span>Status (Klick zum Wechseln):</span>
+    <div class="leg-item"><span class="st-badge st-w">Arbeit</span></div>
+    <div class="leg-item"><span class="st-badge st-u">Übergabe</span></div>
+    <div class="leg-item"><span class="st-badge st-r">Ratten</span></div>
+    <div class="leg-item"><span class="st-badge st-f">Frei</span></div>
+    <div class="leg-item"><span class="st-badge st-v">Urlaub</span></div>
+    <div style="width:1px;background:var(--border);height:20px;margin:0 6px;"></div>
+    <div class="leg-item"><div class="leg-dot" style="background:#221800;border:1px solid #e07a1c;"></div>Übergabewoche (4. Woche je Block)</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#1a2200;border:1px solid #c8c800;"></div>Rattenwoche (jede 3. Woche)</div>
+  </div>
+
+  <div class="card" style="padding:10px;">
+    <div class="grid-wrap">
+      <table class="rot-table">
+        <thead id="rotHead"></thead>
+        <tbody id="rotBody"></tbody>
       </table>
     </div>
   </div>
@@ -265,12 +335,16 @@ function setSyncStatus2(text, ok) {
 }
 
 // ─── Navigation ────────────────────────────────────────────
-function showSection(s, btn) {
+async function showSection(s, btn) {
   document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
   document.getElementById('sec-'+s).classList.add('active');
   btn.classList.add('active');
   if (s === 'uebersicht') { populateOvFilters(); renderOverview(); }
+  if (s === 'rotation') {
+    await loadRotData();
+    renderRotation();
+  }
 }
 
 function changeMonth(dir) {
@@ -483,15 +557,193 @@ function renderOverview() {
   }).join('');
 }
 
+// ─── Rotationsplan ─────────────────────────────────────────
+const ROT_SK = 'dienstplan_rotation_v1';
+let rotData = {};
+let rotSaveTimer = null;
+
+async function loadRotData() {
+  try {
+    const res = await window.storage.get(ROT_SK, true);
+    rotData = res ? JSON.parse(res.value) : {};
+  } catch { rotData = {}; }
+}
+
+async function saveRotData() {
+  try { return !!(await window.storage.set(ROT_SK, JSON.stringify(rotData), true)); }
+  catch { return false; }
+}
+
+function scheduleRotSave() {
+  if (rotSaveTimer) clearTimeout(rotSaveTimer);
+  const el = document.getElementById('rotSyncStatus');
+  if (el) { el.textContent = 'Speichere…'; el.style.color = 'var(--muted)'; }
+  rotSaveTimer = setTimeout(async () => {
+    const ok = await saveRotData();
+    if (el) { el.textContent = ok ? '✓ Gespeichert' : '✗ Fehler'; el.style.color = ok ? 'var(--green)' : 'var(--red)'; }
+  }, 700);
+}
+
+function weekKey(year, kw) { return `${year}-W${String(kw).padStart(2,'0')}`; }
+
+function getWeekStart(year, kw) {
+  // Monday of ISO week
+  const jan4 = new Date(year, 0, 4, 12);
+  const w1Mon = new Date(jan4);
+  w1Mon.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7)); // Monday of week 1
+  const start = new Date(w1Mon);
+  start.setDate(start.getDate() + (kw - 1) * 7);
+  return start;
+}
+
+function fmtWeekRange(year, kw) {
+  const s = getWeekStart(year, kw);
+  const e = new Date(s); e.setDate(e.getDate() + 4); // Fri
+  const f = d => `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.`;
+  return `${f(s)}–${f(e)}`;
+}
+
+// Status cycles
+const ST_CYCLE     = ['w','f','v'];           // normal MA
+const ST_CYCLE_RT  = ['w','r','u','f','v'];   // Christian & Thorsten
+const ST_LABEL = { w:'Arbeit', u:'Übergabe', r:'Ratten', f:'Frei', v:'Urlaub' };
+
+function renderBadge(st) {
+  return `<span class="st-badge st-${st||'w'}">${ST_LABEL[st||'w']}</span>`;
+}
+
+function cycleStatus(wk, ma) {
+  if (!rotData[wk]) rotData[wk] = { employees:{}, isOverlap:false, isRatten:false, blockNum:0, note:'' };
+  const isRT = ma === 'Christian Leyener' || ma === 'Thorsten Nitschke';
+  const cycle = isRT ? ST_CYCLE_RT : ST_CYCLE;
+  const cur = rotData[wk].employees?.[ma] || 'w';
+  const nxt = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
+  if (!rotData[wk].employees) rotData[wk].employees = {};
+  rotData[wk].employees[ma] = nxt;
+  // update just this cell
+  const cell = document.querySelector(`.rot-ma-cell[data-wkey="${wk}"][data-ma="${ma}"]`);
+  if (cell) cell.innerHTML = renderBadge(nxt);
+  // update ratten column
+  refreshRattenCell(wk);
+  scheduleRotSave();
+}
+
+function refreshRattenCell(wk) {
+  const rd = rotData[wk];
+  const who = rd ? (MITARBEITER.find(ma => rd.employees?.[ma] === 'r') || '') : '';
+  const el = document.querySelector(`.ratten-cell[data-wkey="${wk}"]`);
+  if (el) el.textContent = who ? `🐀 ${who.split(' ')[0]}` : (rd?.isRatten ? '🐀' : '');
+}
+
+function autoGenRotation() {
+  const year  = parseInt(document.getElementById('genYear').value);
+  const start = parseInt(document.getElementById('genStartKW').value) || 1;
+  const firstC = document.getElementById('genRattenStart').value === 'C'; // true=Christian first
+  let rattenIdx = 0;
+
+  for (let kw = 1; kw <= 52; kw++) {
+    const wIdx = kw - start; // 0-indexed from chosen start week
+    const blockNum   = wIdx >= 0 ? Math.floor(wIdx / 4) : Math.floor((kw - 1) / 4);
+    const weekInBlock = ((wIdx % 4) + 4) % 4;
+    const isOverlap  = wIdx >= 0 && weekInBlock === 3;      // 4th week of each block
+    const isRatten   = wIdx >= 0 && (kw - start) % 3 === 2; // every 3rd week
+
+    const wk = weekKey(year, kw);
+    const existing = rotData[wk] || {};
+    const emps = {};
+
+    MITARBEITER.forEach(ma => { emps[ma] = isOverlap ? 'u' : 'w'; });
+
+    let rattenPerson = '';
+    if (isRatten) {
+      const useChristian = firstC ? (rattenIdx % 2 === 0) : (rattenIdx % 2 !== 0);
+      rattenPerson = useChristian ? 'Christian Leyener' : 'Thorsten Nitschke';
+      emps[rattenPerson] = 'r';
+      rattenIdx++;
+    }
+
+    rotData[wk] = { employees: emps, ratten: rattenPerson, isOverlap, isRatten, blockNum, note: existing.note || '' };
+  }
+
+  renderRotation();
+  scheduleRotSave();
+}
+
+function clearRotation() {
+  if (!confirm('Rotationsplan zurücksetzen? Alle manuellen Änderungen gehen verloren.')) return;
+  const year = parseInt(document.getElementById('genYear').value);
+  for (let kw = 1; kw <= 52; kw++) delete rotData[weekKey(year, kw)];
+  renderRotation();
+  scheduleRotSave();
+}
+
+function renderRotation() {
+  const year = parseInt(document.getElementById('genYear').value) || 2026;
+
+  document.getElementById('rotHead').innerHTML = `<tr>
+    <th class="th-l">KW</th>
+    <th class="th-l">Mo–Fr</th>
+    <th>Block</th>
+    ${MITARBEITER.map((ma,i) => `<th>${MA_SHORT[i]}</th>`).join('')}
+    <th>Ratten</th>
+    <th class="th-l" style="min-width:140px;">Notiz</th>
+  </tr>`;
+
+  let html = '';
+  let lastBlock = -1;
+
+  for (let kw = 1; kw <= 52; kw++) {
+    const wk = weekKey(year, kw);
+    const rd = rotData[wk] || { employees:{}, isOverlap:false, isRatten:false, blockNum: Math.floor((kw-1)/4), note:'' };
+    const blockNum = rd.blockNum ?? Math.floor((kw-1)/4);
+
+    // Block separator row
+    if (blockNum !== lastBlock) {
+      if (lastBlock >= 0) {
+        html += `<tr class="block-sep"><td colspan="${5 + MITARBEITER.length}">── Block ${blockNum + 1} (KW ${kw}–${Math.min(kw+3,52)}) ──────────────────────────</td></tr>`;
+      }
+      lastBlock = blockNum;
+    }
+
+    const rowCls = ['rot-week', rd.isOverlap ? 'rot-overlap' : '', rd.isRatten ? 'rot-ratten' : ''].filter(Boolean).join(' ');
+    const blockLabel = `${blockNum + 1}${rd.isOverlap ? ' 🔄' : ''}`;
+    const rattenWho = rd.isRatten ? (MITARBEITER.find(ma => rd.employees?.[ma] === 'r') || rd.ratten || '') : '';
+    const rattenShort = rattenWho ? '🐀 ' + rattenWho.split(' ')[0] : '';
+
+    html += `<tr class="${rowCls}" data-wkey="${wk}">
+      <td class="kw-cell">KW ${kw}</td>
+      <td class="dates-cell">${fmtWeekRange(year, kw)}</td>
+      <td class="block-cell">${blockLabel}</td>
+      ${MITARBEITER.map(ma => {
+        const st = rd.employees?.[ma] || 'w';
+        return `<td class="rot-ma-cell" data-wkey="${wk}" data-ma="${ma}" onclick="cycleStatus('${wk}','${ma}')">${renderBadge(st)}</td>`;
+      }).join('')}
+      <td class="ratten-cell" data-wkey="${wk}">${rattenShort}</td>
+      <td><input class="notiz-input" style="font-size:11px;padding:3px 5px;" data-wkey="${wk}"
+        value="${(rd.note||'').replace(/"/g,'&quot;')}" placeholder="Notiz…"
+        oninput="onRotNotiz(this)"></td>
+    </tr>`;
+  }
+
+  document.getElementById('rotBody').innerHTML = html;
+}
+
+function onRotNotiz(el) {
+  const wk = el.dataset.wkey;
+  if (!rotData[wk]) rotData[wk] = { employees:{}, note:'' };
+  rotData[wk].note = el.value;
+  scheduleRotSave();
+}
+
 // ─── Init ──────────────────────────────────────────────────
 window.addEventListener('load', async () => {
-  // Default to current month (July 2026)
   const now = new Date();
   currentYear = now.getFullYear();
   currentMonth = now.getMonth();
 
   setSyncStatus('Lade Daten…');
   await loadData();
+  await loadRotData();
   setSyncStatus('✓ Daten synchron', true);
 
   renderGrid();
