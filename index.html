@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dienstplan 2025/2026</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --blue: #c2630f; --blue-light: #e07a1c; --accent: #2faa6a;
+  --bg: #12161c; --white: #1b212b; --border: #2c3543;
+  --text: #e4e8ee; --muted: #8a96a8; --green: #2faa6a; --red: #e0564a; --row-alt: #1f2632;
+  --weekend-bg: #181c24; --holiday-bg: #2a1f00;
+  --kat-K: #FFC000; --kat-R: #92D050; --kat-RE: #00B0F0;
+  --kat-Ra: #FFFF00; --kat-S: #e0564a; --kat-Fr: #888;
+}
+body { font-family: Arial, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+header { background: linear-gradient(135deg, #1a1f28 0%, #241b14 100%); color: white; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; height: 64px; box-shadow: 0 2px 12px rgba(0,0,0,0.4); border-bottom: 2px solid var(--blue-light); }
+header h1 { font-size: 19px; font-weight: 700; letter-spacing: 0.6px; }
+header .subtitle { font-size: 12px; opacity: 0.6; margin-top: 3px; }
+.header-left { display: flex; align-items: center; gap: 14px; }
+.logo { width: 38px; height: 38px; background: linear-gradient(135deg, var(--blue-light), var(--blue)); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 3px 10px rgba(224,122,28,0.35); }
+nav { background: #1c2129; display: flex; padding: 0 28px; gap: 2px; border-bottom: 1px solid var(--border); }
+nav button { background: none; border: none; color: var(--muted); padding: 12px 18px; cursor: pointer; font-size: 13px; font-weight: 600; border-bottom: 3px solid transparent; transition: all 0.15s; }
+nav button:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+nav button.active { color: var(--blue-light); border-bottom-color: var(--blue-light); }
+main { padding: 20px; max-width: 1600px; margin: 0 auto; }
+.section { display: none; } .section.active { display: block; }
+.card { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 18px; }
+.card h2 { font-size: 15px; color: var(--blue); margin-bottom: 14px; font-weight: 700; border-bottom: 2px solid var(--accent); padding-bottom: 8px; display: inline-block; }
+
+/* Month nav */
+.month-nav { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; background: var(--white); padding: 12px 18px; border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap; }
+.month-nav h2 { font-size: 17px; font-weight: 700; color: var(--text); min-width: 160px; text-align: center; }
+.btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 700; transition: opacity 0.15s; }
+.btn:hover { opacity: 0.85; }
+.btn-primary { background: var(--blue-light); color: white; }
+.btn-ghost { background: var(--border); color: var(--text); padding: 7px 14px; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-green { background: var(--green); color: white; }
+#syncStatus { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+/* Grid table */
+.grid-wrap { overflow-x: auto; }
+.grid-table { border-collapse: collapse; min-width: 900px; width: 100%; }
+.grid-table th { background: var(--blue); color: white; padding: 8px 6px; font-size: 12px; text-align: center; white-space: nowrap; position: sticky; top: 0; z-index: 10; }
+.grid-table th.th-date { text-align: left; padding-left: 10px; min-width: 75px; }
+.grid-table th.th-day { min-width: 28px; }
+.grid-table th.th-kw { min-width: 36px; background: #a35608; }
+.grid-table th.th-ma { min-width: 155px; }
+.grid-table th.th-notiz { min-width: 160px; background: #1e4a6b; }
+
+/* Rows */
+.grid-table tr.row-kw { }
+.grid-table td.td-kw-label { background: #1a1208; color: var(--blue-light); font-size: 11px; font-weight: 700; padding: 3px 6px; border-bottom: 1px solid var(--border); }
+.grid-table tr.row-day td { border-bottom: 1px solid var(--border); vertical-align: top; padding: 0; }
+.grid-table tr.row-day:hover td { filter: brightness(1.08); }
+
+td.td-date { font-size: 12px; font-weight: 700; color: var(--muted); padding: 5px 6px 5px 10px; vertical-align: middle; white-space: nowrap; }
+td.td-day { font-size: 12px; color: var(--muted); padding: 5px 4px; vertical-align: middle; text-align: center; }
+td.td-kw { font-size: 10px; color: #a35608; font-weight: 700; text-align: center; padding: 5px 4px; vertical-align: middle; }
+td.td-ma { padding: 4px 5px; vertical-align: top; min-width: 155px; }
+td.td-notiz { padding: 4px 5px; vertical-align: top; }
+
+/* Weekend & Holiday rows */
+tr.is-weekend td { background: var(--weekend-bg) !important; }
+tr.is-weekend td.td-date, tr.is-weekend td.td-day { color: #4a5568; }
+tr.is-holiday td { background: var(--holiday-bg) !important; }
+tr.is-holiday td.td-date { color: var(--blue-light); }
+.holiday-label { font-size: 10px; color: var(--blue-light); display: block; margin-top: 1px; font-weight: 600; }
+
+/* Cell inputs */
+.cell-inner { display: flex; flex-direction: column; gap: 3px; }
+.kat-sel { width: 100%; padding: 3px 5px; border: 1px solid var(--border); border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer; color: #111; background: transparent; }
+.kat-sel option { background: #1b212b; color: var(--text); }
+.cell-input { width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; background: var(--bg); color: var(--text); }
+.cell-input:focus, .kat-sel:focus { outline: none; border-color: var(--blue-light); }
+.notiz-input { width: 100%; padding: 4px 6px; border: 1px solid #1e4a6b; border-radius: 4px; font-size: 12px; background: #101820; color: var(--text); }
+.notiz-input:focus { outline: none; border-color: #3b82b8; }
+
+/* Weekend cells: no input visible on non-work days */
+tr.is-weekend .cell-input, tr.is-weekend .kat-sel { opacity: 0.35; }
+
+/* Legend bar */
+.legend-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; background: var(--white); padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border); align-items: center; }
+.legend-bar span { font-size: 11px; font-weight: 700; color: var(--muted); margin-right: 4px; }
+.leg-item { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; }
+.leg-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+
+/* Overview */
+.filter-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; background: var(--white); padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); }
+.filter-row label { font-size: 12px; font-weight: 700; color: var(--blue); }
+.filter-row select { border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px; font-size: 13px; background: var(--white); color: var(--text); }
+.log-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.log-table th { background: var(--blue); color: white; padding: 7px 10px; text-align: left; }
+.log-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.log-table tr:nth-child(even) td { background: var(--row-alt); }
+.kat-badge { display: inline-block; border-radius: 3px; padding: 1px 7px; font-size: 11px; font-weight: 700; color: #111; }
+.empty-state { text-align: center; padding: 36px; color: var(--muted); font-size: 14px; }
+.tbl-scroll { overflow-x: auto; }
+
+@media (max-width: 768px) {
+  main { padding: 10px; }
+  header h1 { font-size: 15px; }
+  nav button { padding: 8px 10px; font-size: 12px; }
+  .grid-table th.th-ma { min-width: 130px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo">📅</div>
+    <div><h1>Dienstplan 2025/2026</h1><div class="subtitle">Monatliche Einsatzplanung · Kanalunterhaltung</div></div>
+  </div>
+  <div id="syncStatus">Lade…</div>
+</header>
+
+<nav>
+  <button class="active" onclick="showSection('plan', this)">📅 Monatsplan</button>
+  <button onclick="showSection('uebersicht', this)">📋 Übersicht</button>
+</nav>
+
+<main>
+
+<!-- ===== MONATSPLAN ===== -->
+<div id="sec-plan" class="section active">
+
+  <div class="month-nav">
+    <button class="btn btn-ghost" onclick="changeMonth(-1)">◀ Vormonat</button>
+    <h2 id="monthTitle">—</h2>
+    <button class="btn btn-ghost" onclick="changeMonth(+1)">Nächster ▶</button>
+    <div style="font-size:12px;color:var(--muted);margin-left:8px;">Änderungen werden automatisch gespeichert.</div>
+    <span id="syncStatus2" style="margin-left:auto;font-size:11px;color:var(--muted);"></span>
+  </div>
+
+  <div class="legend-bar">
+    <span>Legende:</span>
+    <div class="leg-item"><div class="leg-dot" style="background:#FFC000"></div>Kontrolle/Instandh.</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#92D050"></div>Reinigung</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#00B0F0"></div>Regeneinläufe</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#FFFF00"></div>Ratten</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#e0564a"></div>Sonstiges</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#888"></div>Frei</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#2a1f00;border:1px solid var(--blue-light)"></div>Feiertag (NRW)</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#181c24;border:1px solid #3a4455"></div>Wochenende</div>
+  </div>
+
+  <div class="card" style="padding: 12px;">
+    <div class="grid-wrap">
+      <table class="grid-table" id="gridTable">
+        <thead id="gridHead"></thead>
+        <tbody id="gridBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ÜBERSICHT ===== -->
+<div id="sec-uebersicht" class="section">
+  <div class="card">
+    <h2>Alle Einträge</h2>
+    <div class="filter-row">
+      <label>Monat:</label>
+      <select id="ovMonth" onchange="renderOverview()">
+        <option value="">Alle</option>
+      </select>
+      <label>Mitarbeiter:</label>
+      <select id="ovMA" onchange="renderOverview()">
+        <option value="">Alle</option>
+      </select>
+      <label>Kategorie:</label>
+      <select id="ovKat" onchange="renderOverview()">
+        <option value="">Alle</option>
+        <option value="K">Kontrolle/Instandh.</option>
+        <option value="R">Reinigung</option>
+        <option value="RE">Regeneinläufe</option>
+        <option value="Ra">Ratten</option>
+        <option value="S">Sonstiges</option>
+        <option value="Fr">Frei</option>
+      </select>
+    </div>
+    <div class="tbl-scroll">
+      <table class="log-table">
+        <thead><tr><th>Datum</th><th>Tag</th><th>Mitarbeiter</th><th>Kategorie</th><th>Eintrag</th><th>Tagesnotiz</th></tr></thead>
+        <tbody id="ovBody"></tbody>
+      </table>
+    </div>
+    <div id="ovEmpty" class="empty-state" style="display:none">Keine Einträge vorhanden.</div>
+  </div>
+</div>
+
+</main>
+
+<script>
+const MITARBEITER = ['Stefan Bertelmann','Christian Leyener','Zakir Memic','Thorsten Nitschke','Rainer Wurmbach','Isah Zeppenfeld'];
+const MA_SHORT = ['Stefan','Christian','Zakir','Thorsten','Rainer','Isah'];
+const SK = 'dienstplan_v1';
+const TAGE_KURZ = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+const MONATE_LANG = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const MONATE_KURZ = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+
+const KATEGORIEN = [
+  { id: '',    label: '—',                  color: null,      textColor: null },
+  { id: 'K',   label: 'Kontrolle/Instandh.',color: '#FFC000', textColor: '#111' },
+  { id: 'R',   label: 'Reinigung',          color: '#92D050', textColor: '#111' },
+  { id: 'RE',  label: 'Regeneinläufe',      color: '#00B0F0', textColor: '#111' },
+  { id: 'Ra',  label: 'Ratten',             color: '#FFFF00', textColor: '#111' },
+  { id: 'S',   label: 'Sonstiges',          color: '#e0564a', textColor: 'white' },
+  { id: 'Fr',  label: 'Frei',               color: '#888',    textColor: 'white' },
+];
+
+const FEIERTAGE_NRW = {
+  '2025-01-01':'Neujahr', '2025-04-18':'Karfreitag', '2025-04-21':'Ostermontag',
+  '2025-05-01':'Tag der Arbeit', '2025-05-29':'Christi Himmelfahrt',
+  '2025-06-09':'Pfingstmontag', '2025-06-19':'Fronleichnam',
+  '2025-10-03':'Tag d. Dt. Einheit', '2025-11-01':'Allerheiligen',
+  '2025-12-25':'1. Weihnachtstag', '2025-12-26':'2. Weihnachtstag',
+  '2026-01-01':'Neujahr', '2026-04-03':'Karfreitag', '2026-04-06':'Ostermontag',
+  '2026-05-01':'Tag der Arbeit', '2026-05-14':'Christi Himmelfahrt',
+  '2026-05-25':'Pfingstmontag', '2026-06-04':'Fronleichnam',
+  '2026-10-03':'Tag d. Dt. Einheit', '2026-11-01':'Allerheiligen',
+  '2026-12-25':'1. Weihnachtstag', '2026-12-26':'2. Weihnachtstag',
+};
+
+// data[dateStr] = { entries: { 'Stefan Bertelmann': { text, kat } }, notiz }
+let data = {};
+let currentYear = 2026;
+let currentMonth = 6; // 0-indexed; default = Juli 2026 (today)
+
+let saveTimer = null;
+
+// ─── Storage ───────────────────────────────────────────────
+async function loadData() {
+  try {
+    const res = await window.storage.get(SK, true);
+    data = res ? JSON.parse(res.value) : {};
+  } catch { data = {}; }
+}
+
+async function saveData() {
+  try {
+    const res = await window.storage.set(SK, JSON.stringify(data), true);
+    return !!res;
+  } catch { return false; }
+}
+
+function scheduleSave() {
+  if (saveTimer) clearTimeout(saveTimer);
+  setSyncStatus2('Speichere…', false);
+  saveTimer = setTimeout(async () => {
+    const ok = await saveData();
+    setSyncStatus2(ok ? '✓ Gespeichert' : '✗ Fehler', ok);
+  }, 700);
+}
+
+function setSyncStatus(text, ok) {
+  const el = document.getElementById('syncStatus');
+  if (el) { el.textContent = text; el.style.color = ok ? 'var(--green)' : 'var(--muted)'; }
+}
+function setSyncStatus2(text, ok) {
+  const el = document.getElementById('syncStatus2');
+  if (el) { el.textContent = text; el.style.color = ok ? 'var(--green)' : 'var(--muted)'; }
+}
+
+// ─── Navigation ────────────────────────────────────────────
+function showSection(s, btn) {
+  document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+  document.getElementById('sec-'+s).classList.add('active');
+  btn.classList.add('active');
+  if (s === 'uebersicht') { populateOvFilters(); renderOverview(); }
+}
+
+function changeMonth(dir) {
+  currentMonth += dir;
+  if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+  if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+  renderGrid();
+}
+
+// ─── Helpers ───────────────────────────────────────────────
+function pad(n) { return String(n).padStart(2,'0'); }
+
+function dateStr(y, m, d) { return `${y}-${pad(m+1)}-${pad(d)}`; }
+
+function getISOWeek(date) {
+  const d = new Date(date); d.setHours(12);
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  const y1 = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil((((d - y1) / 86400000) + 1) / 7);
+}
+
+function fmtDate(ds) {
+  const [y,m,d] = ds.split('-');
+  return `${d}.${m}.`;
+}
+
+function entryData(ds) {
+  if (!data[ds]) data[ds] = { entries: {}, notiz: '' };
+  return data[ds];
+}
+
+function maEntry(ds, ma) {
+  const d = entryData(ds);
+  if (!d.entries[ma]) d.entries[ma] = { text: '', kat: '' };
+  return d.entries[ma];
+}
+
+function katInfo(id) { return KATEGORIEN.find(k => k.id === id) || KATEGORIEN[0]; }
+
+function applyKatStyle(sel, kat) {
+  const k = katInfo(kat);
+  if (k.color) {
+    sel.style.background = k.color;
+    sel.style.color = k.textColor;
+    sel.style.borderColor = k.color;
+  } else {
+    sel.style.background = 'var(--bg)';
+    sel.style.color = 'var(--muted)';
+    sel.style.borderColor = 'var(--border)';
+  }
+}
+
+// ─── Grid rendering ────────────────────────────────────────
+function renderGrid() {
+  const y = currentYear, m = currentMonth;
+  document.getElementById('monthTitle').textContent = `${MONATE_LANG[m]} ${y}`;
+
+  // Header
+  const head = document.getElementById('gridHead');
+  head.innerHTML = `<tr>
+    <th class="th-date">Datum</th>
+    <th class="th-day">Tag</th>
+    <th class="th-kw">KW</th>
+    ${MITARBEITER.map((ma, i) => `<th class="th-ma">${MA_SHORT[i]}</th>`).join('')}
+    <th class="th-notiz">📝 Tagesnotiz</th>
+  </tr>`;
+
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  let lastKW = null;
+  let html = '';
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const ds = dateStr(y, m, day);
+    const dateObj = new Date(y, m, day, 12);
+    const dow = dateObj.getDay(); // 0=So,6=Sa
+    const isWeekend = dow === 0 || dow === 6;
+    const isoKW = getISOWeek(dateObj);
+    const feiertag = FEIERTAGE_NRW[ds] || null;
+    const tagKurz = TAGE_KURZ[dow];
+
+    // KW separator row
+    if (isoKW !== lastKW) {
+      html += `<tr class="row-kw"><td colspan="${3 + MITARBEITER.length + 1}" class="td-kw-label">KW ${isoKW}</td></tr>`;
+      lastKW = isoKW;
+    }
+
+    const rowClass = feiertag ? 'row-day is-holiday' : isWeekend ? 'row-day is-weekend' : 'row-day';
+    html += `<tr class="${rowClass}" data-date="${ds}">`;
+
+    // Date cell
+    html += `<td class="td-date">${fmtDate(ds)}${feiertag ? `<span class="holiday-label">🔴 ${feiertag}</span>` : ''}</td>`;
+    html += `<td class="td-day">${tagKurz}</td>`;
+    html += `<td class="td-kw" rowspan="1"></td>`;
+
+    // MA cells
+    const dayData = data[ds] || { entries: {}, notiz: '' };
+    MITARBEITER.forEach(ma => {
+      const entry = dayData.entries?.[ma] || { text: '', kat: '' };
+      const katOpts = KATEGORIEN.map(k =>
+        `<option value="${k.id}" ${entry.kat === k.id ? 'selected' : ''}>${k.label}</option>`
+      ).join('');
+      const k = katInfo(entry.kat);
+      const katBg = k.color ? `background:${k.color};color:${k.textColor};border-color:${k.color};` : '';
+      html += `<td class="td-ma">
+        <div class="cell-inner">
+          <select class="kat-sel" style="${katBg}" data-date="${ds}" data-ma="${ma}" onchange="onKatChange(this)">${katOpts}</select>
+          <input type="text" class="cell-input" data-date="${ds}" data-ma="${ma}"
+            value="${(entry.text||'').replace(/"/g,'&quot;')}"
+            placeholder="${isWeekend && !feiertag ? '' : 'Eintrag…'}"
+            oninput="onTextChange(this)">
+        </div>
+      </td>`;
+    });
+
+    // Notiz cell
+    const notiz = dayData.notiz || '';
+    html += `<td class="td-notiz">
+      <input type="text" class="notiz-input" data-date="${ds}"
+        value="${notiz.replace(/"/g,'&quot;')}"
+        placeholder="Notiz für alle…"
+        oninput="onNotizChange(this)">
+    </td>`;
+
+    html += '</tr>';
+  }
+
+  document.getElementById('gridBody').innerHTML = html;
+}
+
+// ─── Input handlers ────────────────────────────────────────
+function onTextChange(el) {
+  const { date, ma } = el.dataset;
+  maEntry(date, ma).text = el.value;
+  scheduleSave();
+}
+
+function onKatChange(el) {
+  const { date, ma } = el.dataset;
+  maEntry(date, ma).kat = el.value;
+  applyKatStyle(el, el.value);
+  scheduleSave();
+}
+
+function onNotizChange(el) {
+  const ds = el.dataset.date;
+  entryData(ds).notiz = el.value;
+  scheduleSave();
+}
+
+// ─── Overview ──────────────────────────────────────────────
+function populateOvFilters() {
+  const mSel = document.getElementById('ovMonth');
+  const maSel = document.getElementById('ovMA');
+  const existing = [...mSel.options].map(o => o.value);
+
+  // Months from data keys
+  const months = [...new Set(Object.keys(data).map(d => d.slice(0,7)))].sort();
+  months.forEach(m => {
+    if (!existing.includes(m)) {
+      const [y, mo] = m.split('-');
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = `${MONATE_KURZ[parseInt(mo)-1]} ${y}`;
+      mSel.appendChild(opt);
+    }
+  });
+
+  if (maSel.options.length === 1) {
+    MITARBEITER.forEach(ma => {
+      const opt = document.createElement('option');
+      opt.value = ma; opt.textContent = ma; maSel.appendChild(opt);
+    });
+  }
+}
+
+function renderOverview() {
+  const filterM = document.getElementById('ovMonth').value;
+  const filterMA = document.getElementById('ovMA').value;
+  const filterKat = document.getElementById('ovKat').value;
+  const tbody = document.getElementById('ovBody');
+  const empty = document.getElementById('ovEmpty');
+
+  let rows = [];
+  Object.entries(data).sort((a,b) => b[0].localeCompare(a[0])).forEach(([ds, day]) => {
+    if (filterM && !ds.startsWith(filterM)) return;
+    Object.entries(day.entries || {}).forEach(([ma, entry]) => {
+      if (!entry.text && !entry.kat) return;
+      if (filterMA && ma !== filterMA) return;
+      if (filterKat && entry.kat !== filterKat) return;
+      const dateObj = new Date(ds + 'T12:00:00');
+      rows.push({ ds, ma, entry, notiz: day.notiz || '', tag: TAGE_KURZ[dateObj.getDay()] });
+    });
+  });
+
+  if (rows.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = rows.map(r => {
+    const k = katInfo(r.entry.kat);
+    const badge = k.color
+      ? `<span class="kat-badge" style="background:${k.color};color:${k.textColor}">${k.label}</span>`
+      : '<span style="color:var(--muted)">—</span>';
+    return `<tr>
+      <td>${fmtDate(r.ds)}<span style="font-size:10px;color:var(--muted)"> ${r.ds.slice(0,4)}</span></td>
+      <td>${r.tag}</td>
+      <td><b>${r.ma}</b></td>
+      <td>${badge}</td>
+      <td>${r.entry.text || '—'}</td>
+      <td style="color:var(--muted);font-style:italic">${r.notiz || ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Init ──────────────────────────────────────────────────
+window.addEventListener('load', async () => {
+  // Default to current month (July 2026)
+  const now = new Date();
+  currentYear = now.getFullYear();
+  currentMonth = now.getMonth();
+
+  setSyncStatus('Lade Daten…');
+  await loadData();
+  setSyncStatus('✓ Daten synchron', true);
+
+  renderGrid();
+  populateOvFilters();
+});
+</script>
+</body>
+</html>
