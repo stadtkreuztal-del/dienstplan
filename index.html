@@ -3,167 +3,174 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kanal-Einsatzplanung</title>
-
-<!-- Firebase (compat-Build, damit der restliche Code als normales Skript funktioniert) -->
+<title>Dienstplan 2025/2026</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --blue: #c2630f; --blue-light: #e07a1c; --accent: #2faa6a;
-    --bg: #12161c; --white: #1b212b; --border: #2c3543;
-    --text: #e4e8ee; --muted: #8a96a8; --green: #2faa6a; --red: #e0564a; --row-alt: #1f2632;
-    --purple: #8a6fd8; --amber: #d9a441;
-  }
-  body { font-family: Arial, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-  header { background: linear-gradient(135deg, #1a1f28 0%, #241b14 100%); color: white; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; height: 64px; box-shadow: 0 2px 12px rgba(0,0,0,0.4); border-bottom: 2px solid var(--blue-light); }
-  header h1 { font-size: 19px; font-weight: 700; letter-spacing: 0.6px; }
-  header .subtitle { font-size: 12px; opacity: 0.6; margin-top: 3px; letter-spacing: 0.3px; }
-  .header-left { display: flex; align-items: center; gap: 14px; }
-  .logo { width: 38px; height: 38px; background: linear-gradient(135deg, var(--blue-light), var(--blue)); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 3px 10px rgba(224,122,28,0.35); }
-  nav { background: #1c2129; display: flex; padding: 0 28px; gap: 2px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  nav button { background: none; border: none; color: var(--muted); padding: 12px 18px; cursor: pointer; font-size: 13px; font-weight: 600; border-bottom: 3px solid transparent; transition: all 0.15s; }
-  nav button:hover { color: var(--text); background: rgba(255,255,255,0.04); }
-  nav button.active { color: var(--blue-light); border-bottom-color: var(--blue-light); }
-  main { padding: 24px; max-width: 1400px; margin: 0 auto; }
-  .section { display: none; }
-  .section.active { display: block; }
-  .card { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-  .card h2 { font-size: 15px; color: var(--blue); margin-bottom: 16px; font-weight: 700; border-bottom: 2px solid var(--accent); padding-bottom: 8px; display: inline-block; }
-  .date-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; background: var(--white); padding: 14px 20px; border-radius: 8px; border: 1px solid var(--border); }
-  .date-row label { font-weight: 700; font-size: 13px; color: var(--blue); }
-  .date-row input[type=date] { border: 1px solid var(--border); border-radius: 5px; padding: 7px 10px; font-size: 13px; cursor: pointer; background: var(--white); color: var(--text); color-scheme: dark; }
-  .quick-row { display: flex; gap: 5px; margin-bottom: 8px; }
-  .qbtn { flex: 1; background: #0f1318; border: 1px solid var(--border); color: var(--muted); border-radius: 5px; padding: 5px 0; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.12s; }
-  .qbtn:hover { border-color: var(--blue-light); color: var(--text); }
-  .qbtn.active { background: var(--green); border-color: var(--green); color: white; }
-  .day-info { background: var(--accent); color: white; padding: 5px 12px; border-radius: 5px; font-size: 12px; font-weight: 700; }
-  .hours-info { background: var(--blue); color: white; padding: 5px 12px; border-radius: 5px; font-size: 12px; font-weight: 700; }
-  .step-label { font-size: 11px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-  .step-num { background: var(--blue); color: white; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; }
-  .pill-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-  .pill { border: 2px solid var(--border); background: var(--white); border-radius: 20px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.12s; color: var(--text); user-select: none; }
-  .pill:hover { border-color: var(--blue-light); }
-  .pill.active.ma { background: var(--blue); border-color: var(--blue); color: white; }
-  .pill.active.fz { background: var(--green); border-color: var(--green); color: white; }
-  .pill .check { display: none; }
-  .pill.active .check { display: inline; }
-  .tat-blocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
-  .tat-block { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: #161b23; transition: all 0.12s; }
-  .tat-block.has-hours { border-color: var(--green); background: #132019; }
-  .tat-block-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-  .tat-block-title { font-size: 13px; font-weight: 700; color: var(--blue); }
-  .tat-block-input-row { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
-  .tat-block input[type=number] { width: 70px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; text-align: right; background: var(--bg); color: var(--text); }
-  .summary-bar { display: flex; gap: 16px; flex-wrap: wrap; background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 14px 20px; margin-bottom: 20px; position: sticky; top: 0; z-index: 50; }
-  .summary-item { display: flex; flex-direction: column; gap: 4px; min-width: 130px; }
-  .summary-item .name { font-size: 12px; font-weight: 700; color: var(--blue); }
-  .hours-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; width: 130px; }
-  .hours-bar-fill { height: 100%; background: var(--green); transition: width 0.3s; }
-  .hours-bar-fill.over { background: var(--red); }
-  .hours-val { font-size: 11px; font-weight: 700; color: var(--muted); }
-  .hours-val.ok { color: var(--green); }
-  .hours-val.over { color: var(--red); }
-  .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 700; transition: opacity 0.15s; }
-  .btn:hover { opacity: 0.85; }
-  .btn-primary { background: var(--blue-light); color: white; }
-  .btn-accent { background: var(--accent); color: white; }
-  .btn-green { background: var(--green); color: white; }
-  .btn-purple { background: var(--purple); color: white; }
-  .btn-red { background: var(--red); color: white; font-size: 12px; padding: 5px 10px; }
-  .btn-sm { padding: 5px 10px; font-size: 12px; }
-  .btn-row { display: flex; gap: 10px; margin-top: 16px; align-items: center; flex-wrap: wrap; }
-  .empty-state { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
-  .hint { font-size: 12px; color: var(--muted); margin-top: -4px; margin-bottom: 16px; }
-  .filter-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; background: var(--white); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border); }
-  .filter-row label { font-size: 12px; font-weight: 700; color: var(--blue); white-space: nowrap; }
-  .filter-row select, .filter-row input[type=date] { border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px; font-size: 13px; min-width: 140px; background: var(--white); color: var(--text); color-scheme: dark; }
-  .month-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
-  .month-tab { background: var(--white); border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; color: var(--muted); font-weight: 600; }
-  .month-tab.active { background: var(--blue); color: white; border-color: var(--blue); }
-  .month-tab:hover:not(.active) { background: var(--bg); }
-  .log-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .log-table th { background: var(--blue); color: white; padding: 7px 10px; text-align: left; }
-  .log-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  .log-table tr:nth-child(even) td { background: var(--row-alt); }
-  .tag { display: inline-block; background: var(--blue); color: white; border-radius: 3px; padding: 1px 6px; font-size: 10px; margin: 1px; }
-  .tag.v { background: var(--green); }
-  .tbl-scroll { overflow-x: auto; }
-  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px; }
-  .stat-card { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center; }
-  .stat-card .val { font-size: 28px; font-weight: 700; color: var(--blue); }
-  .stat-card .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .stats-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .stats-table th { background: var(--blue); color: white; padding: 8px 12px; text-align: left; font-size: 12px; }
-  .stats-table th.num { text-align: right; }
-  .stats-table td { padding: 7px 12px; border-bottom: 1px solid var(--border); }
-  .stats-table td.num { text-align: right; font-weight: 600; font-family: monospace; }
-  .stats-table tr:nth-child(even) td { background: var(--row-alt); }
-  .stats-table tr.total-row td { background: #1e2a3e; font-weight: 700; border-top: 2px solid var(--blue); }
-  .matrix-wrap { overflow-x: auto; }
-  .matrix-table { border-collapse: collapse; font-size: 12px; min-width: 600px; }
-  .matrix-table th { background: var(--blue); color: white; padding: 7px 10px; text-align: center; white-space: nowrap; }
-  .matrix-table th.row-h { text-align: left; min-width: 160px; }
-  .matrix-table td { padding: 6px 10px; border: 1px solid var(--border); text-align: center; }
-  .matrix-table td.row-label { text-align: left; font-weight: 600; background: var(--row-alt); }
-  .matrix-table td.total-col { background: #1e2a3e; font-weight: 700; }
-  .matrix-table tr.total-row td { background: #1e2a3e; font-weight: 700; }
-  .heat-0 { background: var(--white); } .heat-1 { background: #1b3a2a; } .heat-2 { background: #1f5c3c; }
-  .heat-3 { background: #2a8a55; color: white; } .heat-4 { background: #2faa6a; color: #0c1410; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --blue: #c2630f; --blue-light: #e07a1c; --accent: #2faa6a;
+  --bg: #12161c; --white: #1b212b; --border: #2c3543;
+  --text: #e4e8ee; --muted: #8a96a8; --green: #2faa6a; --red: #e0564a; --row-alt: #1f2632;
+  --weekend-bg: #181c24; --holiday-bg: #2a1f00;
+  --kat-K: #FFC000; --kat-R: #92D050; --kat-RE: #00B0F0;
+  --kat-Ra: #FFFF00; --kat-S: #e0564a; --kat-Fr: #888;
+}
+body { font-family: Arial, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+header { background: linear-gradient(135deg, #1a1f28 0%, #241b14 100%); color: white; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; height: 64px; box-shadow: 0 2px 12px rgba(0,0,0,0.4); border-bottom: 2px solid var(--blue-light); }
+header h1 { font-size: 19px; font-weight: 700; letter-spacing: 0.6px; }
+header .subtitle { font-size: 12px; opacity: 0.6; margin-top: 3px; }
+.header-left { display: flex; align-items: center; gap: 14px; }
+.logo { width: 38px; height: 38px; background: linear-gradient(135deg, var(--blue-light), var(--blue)); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 3px 10px rgba(224,122,28,0.35); }
+nav { background: #1c2129; display: flex; padding: 0 28px; gap: 2px; border-bottom: 1px solid var(--border); }
+nav button { background: none; border: none; color: var(--muted); padding: 12px 18px; cursor: pointer; font-size: 13px; font-weight: 600; border-bottom: 3px solid transparent; transition: all 0.15s; }
+nav button:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+nav button.active { color: var(--blue-light); border-bottom-color: var(--blue-light); }
+main { padding: 20px; max-width: 1600px; margin: 0 auto; }
+.section { display: none; } .section.active { display: block; }
+.card { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 18px; }
+.card h2 { font-size: 15px; color: var(--blue); margin-bottom: 14px; font-weight: 700; border-bottom: 2px solid var(--accent); padding-bottom: 8px; display: inline-block; }
 
-  /* Passwort-Overlay */
-  #authOverlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 999; }
-  .auth-box { background: var(--white); border: 1px solid var(--border); border-radius: 10px; padding: 32px 36px; width: 300px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
-  .auth-box .logo { margin: 0 auto 14px; }
-  .auth-box h2 { font-size: 16px; margin-bottom: 4px; }
-  .auth-box p { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
-  .auth-box input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; margin-bottom: 10px; text-align: center; letter-spacing: 2px; }
-  .auth-box button { width: 100%; }
-  .auth-err { color: var(--red); font-size: 12px; margin-top: 8px; min-height: 16px; }
-  #appRoot { display: none; }
+/* Month nav */
+.month-nav { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; background: var(--white); padding: 12px 18px; border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap; }
+.month-nav h2 { font-size: 17px; font-weight: 700; color: var(--text); min-width: 160px; text-align: center; }
+.btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 700; transition: opacity 0.15s; }
+.btn:hover { opacity: 0.85; }
+.btn-primary { background: var(--blue-light); color: white; }
+.btn-ghost { background: var(--border); color: var(--text); padding: 7px 14px; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-green { background: var(--green); color: white; }
+#syncStatus { font-size: 11px; color: var(--muted); margin-left: auto; }
 
-  /* Urlaub */
-  .urlaub-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-  .urlaub-form .fld { display: flex; flex-direction: column; gap: 4px; }
-  .urlaub-form label { font-size: 11px; font-weight: 700; color: var(--blue); }
-  .urlaub-form select, .urlaub-form input { border: 1px solid var(--border); border-radius: 5px; padding: 7px 10px; font-size: 13px; background: var(--bg); color: var(--text); color-scheme: dark; }
+/* Grid table */
+.grid-wrap { overflow-x: auto; }
+.grid-table { border-collapse: collapse; min-width: 900px; width: 100%; }
+.grid-table th { background: var(--blue); color: white; padding: 8px 6px; font-size: 12px; text-align: center; white-space: nowrap; position: sticky; top: 0; z-index: 10; }
+.grid-table th.th-date { text-align: left; padding-left: 10px; min-width: 75px; }
+.grid-table th.th-day { min-width: 28px; }
+.grid-table th.th-kw { min-width: 36px; background: #a35608; }
+.grid-table th.th-ma { min-width: 155px; }
+.grid-table th.th-notiz { min-width: 160px; background: #1e4a6b; }
 
-  /* Rotationsplan */
-  .rot-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .rot-table th { background: var(--blue); color: white; padding: 8px 6px; text-align: center; }
-  .rot-table td { padding: 4px; border: 1px solid var(--border); text-align: center; vertical-align: middle; }
-  .rot-table td.wk-col { background: var(--row-alt); font-weight: 700; text-align: left; padding-left: 10px; white-space: nowrap; }
-  .rot-select { width: 100%; border: 1px solid var(--border); border-radius: 4px; padding: 5px 2px; font-size: 11px; background: var(--white); color: var(--text); }
-  .rot-select.t-Reinigung { background: #132019; border-color: var(--green); }
-  .rot-select.t-Kontrolle { background: #1a1f30; border-color: #4d6fd8; }
-  .rot-select.t-Regeneinlaeufe { background: #201a30; border-color: var(--purple); }
-  .rot-select.t-Ratten { background: #301a1a; border-color: var(--red); }
-  .rot-select.t-Urlaub { background: #2b2410; border-color: var(--amber); }
-  .rot-select.t-Frei { background: var(--bg); border-color: var(--border); color: var(--muted); }
-  .vertretung-flag { font-size: 9px; color: var(--amber); display: block; }
-  .legend-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; font-size: 11px; }
-  .legend-item { display: flex; align-items: center; gap: 5px; }
-  .legend-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+/* Rows */
+.grid-table tr.row-kw { }
+.grid-table td.td-kw-label { background: #1a1208; color: var(--blue-light); font-size: 11px; font-weight: 700; padding: 3px 6px; border-bottom: 1px solid var(--border); }
+.grid-table tr.row-day td { border-bottom: 1px solid var(--border); vertical-align: top; padding: 0; }
+.grid-table tr.row-day:hover td { filter: brightness(1.08); }
 
-  @media (max-width: 768px) {
-    main { padding: 12px; } .stats-grid { grid-template-columns: 1fr 1fr; }
-    header h1 { font-size: 15px; } nav button { padding: 8px 12px; font-size: 12px; }
-    .summary-bar { position: static; }
-  }
+td.td-date { font-size: 12px; font-weight: 700; color: var(--muted); padding: 5px 6px 5px 10px; vertical-align: middle; white-space: nowrap; }
+td.td-day { font-size: 12px; color: var(--muted); padding: 5px 4px; vertical-align: middle; text-align: center; }
+td.td-kw { font-size: 10px; color: #a35608; font-weight: 700; text-align: center; padding: 5px 4px; vertical-align: middle; }
+td.td-ma { padding: 4px 5px; vertical-align: top; min-width: 155px; }
+td.td-notiz { padding: 4px 5px; vertical-align: top; }
+
+/* Weekend & Holiday rows */
+tr.is-weekend td { background: var(--weekend-bg) !important; }
+tr.is-weekend td.td-date, tr.is-weekend td.td-day { color: #4a5568; }
+tr.is-holiday td { background: var(--holiday-bg) !important; }
+tr.is-holiday td.td-date { color: var(--blue-light); }
+.holiday-label { font-size: 10px; color: var(--blue-light); display: block; margin-top: 1px; font-weight: 600; }
+
+/* Cell inputs */
+.cell-inner { display: flex; flex-direction: column; gap: 3px; }
+.kat-sel { width: 100%; padding: 3px 5px; border: 1px solid var(--border); border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer; color: #111; background: transparent; }
+.kat-sel option { background: #1b212b; color: var(--text); }
+.cell-input { width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; background: var(--bg); color: var(--text); }
+.cell-input:focus, .kat-sel:focus { outline: none; border-color: var(--blue-light); }
+.notiz-input { width: 100%; padding: 4px 6px; border: 1px solid #1e4a6b; border-radius: 4px; font-size: 12px; background: #101820; color: var(--text); }
+.notiz-input:focus { outline: none; border-color: #3b82b8; }
+
+/* Weekend cells: no input visible on non-work days */
+tr.is-weekend .cell-input, tr.is-weekend .kat-sel { opacity: 0.35; }
+
+/* Legend bar */
+.legend-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; background: var(--white); padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border); align-items: center; }
+.legend-bar span { font-size: 11px; font-weight: 700; color: var(--muted); margin-right: 4px; }
+.leg-item { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; }
+.leg-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+
+/* Overview */
+.filter-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; background: var(--white); padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); }
+.filter-row label { font-size: 12px; font-weight: 700; color: var(--blue); }
+.filter-row select { border: 1px solid var(--border); border-radius: 4px; padding: 5px 8px; font-size: 13px; background: var(--white); color: var(--text); }
+.log-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.log-table th { background: var(--blue); color: white; padding: 7px 10px; text-align: left; }
+.log-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.log-table tr:nth-child(even) td { background: var(--row-alt); }
+.kat-badge { display: inline-block; border-radius: 3px; padding: 1px 7px; font-size: 11px; font-weight: 700; color: #111; }
+.empty-state { text-align: center; padding: 36px; color: var(--muted); font-size: 14px; }
+.tbl-scroll { overflow-x: auto; }
+
+@media (max-width: 768px) {
+  main { padding: 10px; }
+  header h1 { font-size: 15px; }
+  nav button { padding: 8px 10px; font-size: 12px; }
+  .grid-table th.th-ma { min-width: 130px; }
+}
+
+/* ─── Rotationsplan ──────────────────────────────────────── */
+.gen-bar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--white); padding:12px 18px; border-radius:8px; border:1px solid var(--border); margin-bottom:14px; }
+.gen-bar label { font-size:12px; font-weight:700; color:var(--blue); }
+.gen-bar input[type=number] { width:64px; border:1px solid var(--border); border-radius:4px; padding:5px 8px; font-size:13px; background:var(--white); color:var(--text); }
+.gen-bar select { border:1px solid var(--border); border-radius:4px; padding:5px 8px; font-size:13px; background:var(--white); color:var(--text); }
+.rot-table { border-collapse:collapse; min-width:860px; width:100%; }
+.rot-table th { background:var(--blue); color:white; padding:8px 6px; font-size:12px; text-align:center; white-space:nowrap; position:sticky; top:0; z-index:10; }
+.rot-table th.th-l { text-align:left; padding-left:10px; }
+.rot-table td { border-bottom:1px solid var(--border); padding:5px 5px; vertical-align:middle; }
+tr.rot-overlap td { background:#221800 !important; }
+tr.rot-ratten td { background:#1a2200 !important; }
+tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; font-weight:700; padding:3px 10px; border-top:2px solid #252e3e; }
+.kw-cell { font-size:13px; font-weight:700; color:var(--blue-light); min-width:42px; }
+.dates-cell { font-size:11px; color:var(--muted); white-space:nowrap; min-width:105px; }
+.block-cell { font-size:12px; font-weight:700; text-align:center; min-width:68px; color:var(--muted); }
+.rot-ma-cell { text-align:center; min-width:78px; cursor:pointer; user-select:none; padding:4px 3px; }
+.rot-ma-cell:hover { filter:brightness(1.2); }
+.st-badge { display:inline-block; border-radius:4px; padding:3px 8px; font-size:11px; font-weight:700; min-width:62px; text-align:center; }
+.st-w { background:var(--green); color:#071a0a; }
+.st-u { background:#e07a1c; color:#1a0800; }
+.st-r { background:#d4d400; color:#111100; }
+.st-f { background:#2c3543; color:#8a96a8; }
+.st-v { background:#1e4a6b; color:#a0ccee; }
+.ratten-cell { text-align:center; font-size:11px; font-weight:700; color:#c8c800; min-width:70px; }
+
+/* Aufgaben-Badges im Rotationsplan (Farben passend zu den Monatsplan-Kategorien) */
+.st-badge { display:inline-block; border-radius:4px; padding:3px 6px; font-size:10px; font-weight:700; min-width:76px; text-align:center; line-height:1.3; }
+.st-Reinigung      { background:#92D050; color:#111; }
+.st-Kontrolle      { background:#FFC000; color:#111; }
+.st-Regeneinlaeufe { background:#00B0F0; color:#111; }
+.st-Ratten         { background:#FFFF00; color:#111; }
+.st-Urlaub         { background:#1e4a6b; color:#a0ccee; }
+.st-Frei           { background:#2c3543; color:#8a96a8; }
+.vertretung-flag { display:block; font-size:9px; color:#e07a1c; margin-top:2px; font-weight:600; }
+.uebergabe-flag { display:block; font-size:9px; color:#8a96a8; margin-top:2px; font-weight:600; }
+
+/* Urlaub-Verwaltung */
+.urlaub-form { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+.urlaub-form .fld { display:flex; flex-direction:column; gap:4px; }
+.urlaub-form label { font-size:11px; font-weight:700; color:var(--blue); }
+.urlaub-form select, .urlaub-form input { border:1px solid var(--border); border-radius:5px; padding:7px 10px; font-size:13px; background:var(--bg); color:var(--text); color-scheme: dark; }
+
+/* Passwort-Overlay */
+#authOverlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 999; }
+.auth-box { background: var(--white); border: 1px solid var(--border); border-radius: 10px; padding: 32px 36px; width: 300px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+.auth-box .logo { margin: 0 auto 14px; width:44px; height:44px; font-size:20px; }
+.auth-box h2 { font-size: 16px; margin-bottom: 4px; }
+.auth-box p { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+.auth-box input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; margin-bottom: 10px; text-align: center; letter-spacing: 2px; }
+.auth-box button { width: 100%; }
+.auth-err { color: var(--red); font-size: 12px; margin-top: 8px; min-height: 16px; }
+#appRoot { display: none; }
 </style>
 </head>
 <body>
 
 <!-- ===== Passwort-Schutz =====
-     Hinweis: Dies ist ein einfacher Zugriffsschutz auf Seitenebene, kein Ersatz für echte
-     Firestore-Security-Rules. Jeder, der den Seitenquelltext liest, sieht das Passwort.
-     Sichere den Zugriff zusätzlich über Firestore-Regeln (siehe Kommentar bei firebaseConfig). -->
+     Einfacher Zugriffsschutz auf Seitenebene, kein Ersatz für echte Firestore-Security-Rules
+     (der Quelltext inkl. Passwort ist für jeden einsehbar, der die Seite öffnet). -->
 <div id="authOverlay">
   <div class="auth-box">
-    <div class="logo" style="width:44px;height:44px;font-size:20px;">🚧</div>
-    <h2>Kanal-Einsatzplanung</h2>
+    <div class="logo" style="background:linear-gradient(135deg,var(--blue-light),var(--blue));border-radius:9px;display:flex;align-items:center;justify-content:center;">📅</div>
+    <h2>Dienstplan 2025/2026</h2>
     <p>Bitte Passwort eingeben</p>
     <input type="password" id="authInput" placeholder="Passwort" autocomplete="off" onkeydown="if(event.key==='Enter')checkPassword()">
     <button class="btn btn-primary" onclick="checkPassword()">Freischalten</button>
@@ -175,131 +182,59 @@
 
 <header>
   <div class="header-left">
-    <div class="logo">🚧</div>
-    <div><h1>Kanal-Einsatzplanung</h1><div class="subtitle">Tätigkeiten · Fahrzeuge · Rotation · Jahresstatistik</div></div>
+    <div class="logo">📅</div>
+    <div><h1>Dienstplan 2025/2026</h1><div class="subtitle">Monatliche Einsatzplanung · Kanalunterhaltung</div></div>
   </div>
-  <div style="font-size:12px;opacity:0.7;" id="hdrDate"></div>
+  <div id="syncStatus">Lade…</div>
 </header>
 
 <nav>
-  <button class="active" onclick="showSection('eingabe')">⚡ Schnelleingabe</button>
-  <button onclick="showSection('uebersicht')">📋 Einträge</button>
-  <button onclick="showSection('statistik')">📊 Jahresstatistik</button>
-  <button onclick="showSection('matrix')">🚛 Fahrzeug-Matrix</button>
-  <button onclick="showSection('urlaub')">🏖️ Urlaub / Frei</button>
-  <button onclick="showSection('rotation')">🔁 Rotationsplan</button>
+  <button class="active" onclick="showSection('plan', this)">📅 Monatsplan</button>
+  <button onclick="showSection('rotation', this)">🔄 Rotationsplan</button>
+  <button onclick="showSection('uebersicht', this)">📋 Übersicht</button>
 </nav>
 
 <main>
 
-<div id="sec-eingabe" class="section active">
-  <div class="date-row">
-    <label>📅 Datum:</label>
-    <input type="date" id="einDatum" onchange="onDateChange()">
-    <span class="day-info" id="dayName">—</span>
-    <span class="hours-info" id="dayHours">— h</span>
-    <span id="syncStatus" style="font-size:11px;color:var(--muted);margin-left:auto;">Lade…</span>
+<!-- ===== MONATSPLAN ===== -->
+<div id="sec-plan" class="section active">
+
+  <div class="month-nav">
+    <button class="btn btn-ghost" onclick="changeMonth(-1)">◀ Vormonat</button>
+    <h2 id="monthTitle">—</h2>
+    <button class="btn btn-ghost" onclick="changeMonth(+1)">Nächster ▶</button>
+    <div style="font-size:12px;color:var(--muted);margin-left:8px;">Änderungen werden automatisch gespeichert.</div>
+    <span id="syncStatus2" style="margin-left:auto;font-size:11px;color:var(--muted);"></span>
   </div>
 
-  <div class="card">
-    <div class="step-label"><span class="step-num">1</span> Team auswählen</div>
-    <div class="hint">Alle Mitarbeiter anklicken, die heute zusammen gearbeitet haben.</div>
-    <div class="pill-grid" id="maPills"></div>
+  <div class="legend-bar">
+    <span>Legende:</span>
+    <div class="leg-item"><div class="leg-dot" style="background:#FFC000"></div>Kontrolle/Instandh.</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#92D050"></div>Reinigung</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#00B0F0"></div>Regeneinläufe</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#FFFF00"></div>Ratten</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#e0564a"></div>Sonstiges</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#888"></div>Frei</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#2a1f00;border:1px solid var(--blue-light)"></div>Feiertag (NRW)</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#181c24;border:1px solid #3a4455"></div>Wochenende</div>
   </div>
 
-  <div class="card">
-    <div class="step-label"><span class="step-num">2</span> Fahrzeuge auswählen</div>
-    <div class="hint">Diese Fahrzeuge waren beim Team im Einsatz (gilt für alle unten erfassten Tätigkeiten).</div>
-    <div class="pill-grid" id="fzPills"></div>
-  </div>
-
-  <div class="summary-bar" id="summaryBar"></div>
-
-  <div class="card">
-    <div class="step-label"><span class="step-num">3</span> Tätigkeiten &amp; Stunden</div>
-    <div class="hint">Bei jeder Tätigkeit, die heute ausgeführt wurde, die Stunden eintragen — alle markierten Teammitglieder erhalten automatisch diese Stunden.</div>
-    <div class="tat-blocks" id="tatBlocks"></div>
-  </div>
-
-  <div class="card">
-    <div class="btn-row">
-      <button class="btn btn-green" onclick="saveDay()">💾 Tag für gesamtes Team speichern</button>
-      <button class="btn btn-primary btn-sm" onclick="resetForm()">↺ Zurücksetzen</button>
-      <span id="saveMsg" style="font-size:13px;color:var(--green);font-weight:700;"></span>
+  <div class="card" style="padding: 12px;">
+    <div class="grid-wrap">
+      <table class="grid-table" id="gridTable">
+        <thead id="gridHead"></thead>
+        <tbody id="gridBody"></tbody>
+      </table>
     </div>
   </div>
-
-  <div class="card" id="dayPreviewCard" style="display:none">
-    <h2>Bereits gespeichert an diesem Tag</h2>
-    <div id="dayPreview"></div>
-  </div>
 </div>
 
-<div id="sec-uebersicht" class="section">
+<!-- ===== ROTATIONSPLAN ===== -->
+<div id="sec-rotation" class="section">
+
   <div class="card">
-    <h2>Alle Einträge</h2>
-    <div class="filter-row">
-      <label>Monat:</label>
-      <div class="month-tabs" id="monthTabs"></div>
-      <label>Mitarbeiter:</label>
-      <select id="filterMA" onchange="renderLog()"><option value="">Alle</option></select>
-      <label>Fahrzeug:</label>
-      <select id="filterFZ" onchange="renderLog()"><option value="">Alle</option></select>
-    </div>
-    <div class="tbl-scroll">
-    <table class="log-table">
-      <thead><tr><th style="width:90px">Datum</th><th style="width:70px">Tag</th><th>Mitarbeiter</th><th>Tätigkeit</th><th>Fahrzeuge</th><th style="width:70px">Stunden</th><th style="width:70px">Aktion</th></tr></thead>
-      <tbody id="logBody"></tbody>
-    </table>
-    </div>
-    <div id="logEmpty" class="empty-state" style="display:none">Keine Einträge vorhanden.</div>
-  </div>
-</div>
-
-<div id="sec-statistik" class="section">
-  <div class="stats-grid" id="kpiCards"></div>
-  <div class="filter-row">
-    <label>Zeitraum:</label>
-    <select id="statPeriod" onchange="renderStats()">
-      <option value="year">Gesamtes Jahr</option>
-      <option value="q1">Q1 (Jan–Mär)</option><option value="q2">Q2 (Apr–Jun)</option>
-      <option value="q3">Q3 (Jul–Sep)</option><option value="q4">Q4 (Okt–Dez)</option>
-      <option value="month">Einzelner Monat</option>
-    </select>
-    <select id="statMonth" onchange="renderStats()" style="display:none">
-      <option value="0">Januar</option><option value="1">Februar</option><option value="2">März</option>
-      <option value="3">April</option><option value="4">Mai</option><option value="5">Juni</option>
-      <option value="6">Juli</option><option value="7">August</option><option value="8">September</option>
-      <option value="9">Oktober</option><option value="10">November</option><option value="11">Dezember</option>
-    </select>
-    <label>Ansicht:</label>
-    <select id="statView" onchange="renderStats()">
-      <option value="activity">Nach Tätigkeit</option><option value="employee">Nach Mitarbeiter</option><option value="vehicle">Nach Fahrzeug</option>
-    </select>
-    <button class="btn btn-accent btn-sm" onclick="exportCSV()">⬇ CSV Export</button>
-  </div>
-  <div class="card">
-    <h2 id="statTitle">Jahresstatistik</h2>
-    <div class="tbl-scroll"><table class="stats-table" id="statTable"><thead id="statHead"></thead><tbody id="statBody"></tbody></table></div>
-    <div id="statEmpty" class="empty-state" style="display:none">Keine Daten für diesen Zeitraum.</div>
-  </div>
-</div>
-
-<div id="sec-matrix" class="section">
-  <div class="filter-row">
-    <label>Zeitraum:</label>
-    <select id="matPeriod" onchange="renderMatrix()">
-      <option value="year">Gesamtes Jahr</option><option value="q1">Q1</option><option value="q2">Q2</option><option value="q3">Q3</option><option value="q4">Q4</option>
-    </select>
-  </div>
-  <div class="card"><h2>Fahrzeug × Tätigkeit (Stunden)</h2><div class="matrix-wrap" id="matrixWrap"></div></div>
-  <div class="card"><h2>Fahrzeug × Mitarbeiter (Stunden)</h2><div class="matrix-wrap" id="matrixMA"></div></div>
-</div>
-
-<div id="sec-urlaub" class="section">
-  <div class="card">
-    <h2>Urlaub / freien Tag eintragen</h2>
-    <div class="hint">Diese Zeiten werden beim Erstellen des Rotationsplans automatisch berücksichtigt (die Person wird in dieser Woche nicht eingeplant).</div>
+    <h2>1. Urlaub / freie Tage eintragen</h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Vor dem Generieren eintragen — wird automatisch berücksichtigt (Woche gilt als Urlaub, wenn mind. 3 von 5 Arbeitstagen betroffen sind).</div>
     <div class="urlaub-form">
       <div class="fld"><label>Mitarbeiter</label><select id="urlMA"></select></div>
       <div class="fld"><label>Von</label><input type="date" id="urlVon"></div>
@@ -307,61 +242,108 @@
       <div class="fld"><label>Art</label><select id="urlArt"><option value="Urlaub">Urlaub</option><option value="Frei">Frei / Sonstiges</option></select></div>
       <button class="btn btn-green" onclick="addUrlaub()">+ Eintragen</button>
     </div>
-    <span id="urlMsg" style="font-size:12px;color:var(--red);display:block;margin-top:8px;"></span>
-  </div>
-  <div class="card">
-    <h2>Erfasste Zeiten</h2>
-    <div class="tbl-scroll">
+    <span id="urlMsg" style="font-size:12px;display:block;margin-top:8px;"></span>
+    <div class="tbl-scroll" style="margin-top:12px;">
       <table class="log-table">
-        <thead><tr><th>Mitarbeiter</th><th>Art</th><th>Von</th><th>Bis</th><th style="width:70px">Aktion</th></tr></thead>
+        <thead><tr><th>Mitarbeiter</th><th>Art</th><th>Von</th><th>Bis</th><th style="width:50px">Aktion</th></tr></thead>
         <tbody id="urlBody"></tbody>
       </table>
     </div>
     <div id="urlEmpty" class="empty-state" style="display:none">Keine Einträge.</div>
   </div>
+
+  <div class="card">
+    <h2>2. Rotationsplan generieren</h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">
+      Reinigung, Kontrolle und Regeneinläufe rotieren im ca. 4-Wochen-Rhythmus mit ca. 1 Woche Übergabe/Einarbeitung.
+      Ratten übernehmen ausschließlich Christian und Thorsten (abwechselnd, 1 Woche Aufwand, jede 3. Woche fällig) und rotieren ansonsten normal mit.
+      Bei der Reinigung sind immer mindestens 2 Personen eingeplant — fehlt jemand, wird automatisch jemand aus Kontrolle/Regeneinläufe als Vertretung nachgezogen (gelb markiert).
+      Alle Zellen bleiben danach per Klick manuell änderbar.
+    </div>
+    <div class="gen-bar">
+      <label>Jahr:</label>
+      <select id="genYear" onchange="renderRotation()">
+        <option value="2026" selected>2026</option>
+        <option value="2025">2025</option>
+        <option value="2027">2027</option>
+      </select>
+      <label>Start-KW:</label>
+      <input type="number" id="genStartKW" min="1" max="52" value="1">
+      <label>Erster Ratten-Dienst:</label>
+      <select id="genRattenStart">
+        <option value="C">Christian Leyener</option>
+        <option value="T">Thorsten Nitschke</option>
+      </select>
+      <button class="btn btn-green" onclick="autoGenRotation()">⚡ Auto-Generieren</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearRotation()">🗑 Zurücksetzen</button>
+      <span style="font-size:11px;color:var(--muted);">→ Auf Zelle klicken = Aufgabe wechseln</span>
+      <span id="rotSyncStatus" style="margin-left:auto;font-size:11px;color:var(--muted);"></span>
+    </div>
+
+    <div class="legend-bar">
+      <span>Aufgaben (Klick auf Zelle zum Wechseln):</span>
+      <div class="leg-item"><span class="st-badge st-Reinigung">Reinigung</span></div>
+      <div class="leg-item"><span class="st-badge st-Kontrolle">Kontrolle</span></div>
+      <div class="leg-item"><span class="st-badge st-Regeneinlaeufe">Regeneinläufe</span></div>
+      <div class="leg-item"><span class="st-badge st-Ratten">Ratten</span></div>
+      <div class="leg-item"><span class="st-badge st-Urlaub">Urlaub</span></div>
+      <div class="leg-item"><span class="st-badge st-Frei">Frei</span></div>
+      <div style="width:1px;background:var(--border);height:20px;margin:0 6px;"></div>
+      <div class="leg-item"><span style="font-size:9px;color:#e07a1c;font-weight:700;">Vertretung</span> = Reinigung-Notbesetzung</div>
+      <div class="leg-item"><span style="font-size:9px;color:#8a96a8;font-weight:700;">Übergabe von …</span> = Einarbeitungswoche</div>
+    </div>
+
+    <div class="card" style="padding:10px;">
+      <div class="grid-wrap">
+        <table class="rot-table">
+          <thead id="rotHead"></thead>
+          <tbody id="rotBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Verteilung im gewählten Jahr</h2>
+    <div class="tbl-scroll" id="fairnessYear"></div>
+  </div>
+  <div class="card">
+    <h2>Verteilung über alle gespeicherten Jahre (Fairness-Kontrolle)</h2>
+    <div class="tbl-scroll" id="fairnessAll"></div>
+  </div>
 </div>
 
-<div id="sec-rotation" class="section">
+<!-- ===== ÜBERSICHT ===== -->
+<div id="sec-uebersicht" class="section">
   <div class="card">
-    <h2>Rotationsplan generieren</h2>
-    <div class="hint">
-      Regeln: Reinigung, Kontrolle und Regeneinläufe rotieren im ca. 4-Wochen-Rhythmus mit ca. 1 Woche Übergabe/Einarbeitung.
-      Ratten wird ausschließlich von Christian Leyener und Thorsten Nitschke übernommen (1 Woche Aufwand, alle 3 Wochen fällig, abwechselnd).
-      Bei der Reinigung sind immer mindestens 2 Personen eingeplant — fehlt jemand (Ratten-Woche/Urlaub), wird automatisch jemand aus Kontrolle/Regeneinläufe zur Vertretung vorgeschlagen.
-      Der Plan baut auf dem zuletzt gespeicherten Stand auf (Fortsetzung der Rotation) und berücksichtigt Urlaub/Frei-Einträge.
-      Alle Felder sind vor dem Speichern manuell änderbar.
-    </div>
+    <h2>Alle Einträge</h2>
     <div class="filter-row">
       <label>Monat:</label>
-      <select id="rotMonth">
-        <option value="0">Januar</option><option value="1">Februar</option><option value="2">März</option>
-        <option value="3">April</option><option value="4">Mai</option><option value="5">Juni</option>
-        <option value="6">Juli</option><option value="7">August</option><option value="8">September</option>
-        <option value="9">Oktober</option><option value="10">November</option><option value="11">Dezember</option>
+      <select id="ovMonth" onchange="renderOverview()">
+        <option value="">Alle</option>
       </select>
-      <label>Jahr:</label>
-      <input type="number" id="rotYear" style="width:90px;border:1px solid var(--border);border-radius:4px;padding:5px 8px;background:var(--white);color:var(--text);">
-      <button class="btn btn-purple" onclick="generatePlan()">🔁 Plan generieren</button>
-      <button class="btn btn-green" id="rotSaveBtn" style="display:none" onclick="saveRotationPlan()">💾 Plan speichern</button>
+      <label>Mitarbeiter:</label>
+      <select id="ovMA" onchange="renderOverview()">
+        <option value="">Alle</option>
+      </select>
+      <label>Kategorie:</label>
+      <select id="ovKat" onchange="renderOverview()">
+        <option value="">Alle</option>
+        <option value="K">Kontrolle/Instandh.</option>
+        <option value="R">Reinigung</option>
+        <option value="RE">Regeneinläufe</option>
+        <option value="Ra">Ratten</option>
+        <option value="S">Sonstiges</option>
+        <option value="Fr">Frei</option>
+      </select>
     </div>
-    <div class="legend-row">
-      <span class="legend-item"><span class="legend-dot" style="background:#132019;border:1px solid var(--green)"></span>Reinigung</span>
-      <span class="legend-item"><span class="legend-dot" style="background:#1a1f30;border:1px solid #4d6fd8"></span>Kontrolle</span>
-      <span class="legend-item"><span class="legend-dot" style="background:#201a30;border:1px solid var(--purple)"></span>Regeneinläufe</span>
-      <span class="legend-item"><span class="legend-dot" style="background:#301a1a;border:1px solid var(--red)"></span>Ratten</span>
-      <span class="legend-item"><span class="legend-dot" style="background:#2b2410;border:1px solid var(--amber)"></span>Urlaub</span>
-      <span class="legend-item"><span class="legend-dot" style="background:var(--bg);border:1px solid var(--border)"></span>Frei</span>
+    <div class="tbl-scroll">
+      <table class="log-table">
+        <thead><tr><th>Datum</th><th>Tag</th><th>Mitarbeiter</th><th>Kategorie</th><th>Eintrag</th><th>Tagesnotiz</th></tr></thead>
+        <tbody id="ovBody"></tbody>
+      </table>
     </div>
-    <div class="tbl-scroll" id="rotTableWrap"></div>
-    <span id="rotMsg" style="font-size:13px;font-weight:700;display:block;margin-top:10px;"></span>
-  </div>
-  <div class="card">
-    <h2>Verteilung im gewählten Monat</h2>
-    <div class="tbl-scroll" id="rotFairnessMonth"></div>
-  </div>
-  <div class="card">
-    <h2>Verteilung über alle gespeicherten Monate (Fairness-Kontrolle)</h2>
-    <div class="tbl-scroll" id="rotFairnessAll"></div>
+    <div id="ovEmpty" class="empty-state" style="display:none">Keine Einträge vorhanden.</div>
   </div>
 </div>
 
@@ -373,9 +355,9 @@
    FIREBASE-KONFIGURATION
    -------------------------------------------------------------------------
    Bitte hier die ECHTEN Werte aus der Firebase-Konsole eintragen:
-   Projekteinstellungen (Zahnrad-Symbol) -> Allgemein -> "Meine Apps" ->
-   Web-App -> Konfiguration (SDK-Setup und Konfiguration).
-   Ohne diese Werte kann die Anwendung keine Daten speichern/laden.
+   Projekteinstellungen (Zahnrad) -> Allgemein -> "Meine Apps" -> Web-App ->
+   Konfiguration (SDK-Setup und Konfiguration). Ohne diese Werte kann die
+   Anwendung keine Daten speichern/laden.
    ========================================================================= */
 const firebaseConfig = {
   apiKey: "HIER_API_KEY_EINTRAGEN",
@@ -385,11 +367,8 @@ const firebaseConfig = {
   messagingSenderId: "HIER_SENDER_ID",
   appId: "HIER_APP_ID"
 };
-
-/* Empfohlene Firestore-Security-Rules (in der Firebase-Konsole unter
-   Firestore Database -> Regeln einzutragen), damit nicht jeder im Internet
-   ungefragt lesen/schreiben kann. Das Seiten-Passwort ersetzt KEINE
-   echten Regeln, da der Quelltext öffentlich einsehbar ist:
+/* Empfohlene Mindest-Security-Rules (Firebase-Konsole -> Firestore Database
+   -> Regeln), da das Seiten-Passwort unten KEINEN echten Schutz bietet:
 
    rules_version = '2';
    service cloud.firestore {
@@ -399,10 +378,7 @@ const firebaseConfig = {
        }
      }
    }
-   (Zeitlich befristete Regel als Minimal-Schutz; für echten Schutz wird
-   Firebase Authentication empfohlen — bei Bedarf kann ich das ergänzen.)
-*/
-
+   Für echten Schutz wird Firebase Authentication empfohlen. */
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
@@ -413,7 +389,7 @@ const APP_PASSWORD = "kanal";
 function checkPassword() {
   const val = document.getElementById('authInput').value;
   if (val === APP_PASSWORD) {
-    try { sessionStorage.setItem('kanal_auth', '1'); } catch (e) {}
+    try { sessionStorage.setItem('dienstplan_auth', '1'); } catch (e) {}
     document.getElementById('authOverlay').style.display = 'none';
     document.getElementById('appRoot').style.display = 'block';
     startApp();
@@ -423,7 +399,7 @@ function checkPassword() {
 }
 (function checkExistingAuth() {
   let already = false;
-  try { already = sessionStorage.getItem('kanal_auth') === '1'; } catch (e) {}
+  try { already = sessionStorage.getItem('dienstplan_auth') === '1'; } catch (e) {}
   if (already) {
     document.getElementById('authOverlay').style.display = 'none';
     document.getElementById('appRoot').style.display = 'block';
@@ -431,489 +407,370 @@ function checkPassword() {
   }
 })();
 
-/* =========================================================================
-   STAMMDATEN
-   ========================================================================= */
-const MITARBEITER = ['Stefan Bertelmann','Christian Leyener','Zakir Memic','Thorsten Nitschke','Rainer Wurmbach','Josef Wacker'];
-const FAHRZEUGE = ['EMMA (MAN)','Werner (RE)','Berti','Spüler','Weiße','Horst (Ranger)','Frosch'];
-const TAETIGKEITEN = [
-  { group: 'Kontrolle', subs: ['Haltung','Schächte','RÜ','RÜB','RE'] },
-  { group: 'Reinigung', subs: ['Haltung','Schächte','RÜ','RÜB','RE'] },
-  { group: 'Kläranlage', subs: [] },
-  { group: 'Gruben / Kleinkläranlage', subs: [] },
-  { group: 'Grundstücksentwässerung', subs: [] },
-  { group: 'Ratten', subs: [] },
-  { group: 'Winterdienst', subs: [] },
-  { group: 'Fahrzeug Reparatur', subs: [] },
-  { group: 'Unterweisung/Fortbildung', subs: [] },
-  { group: 'Andere Tätigkeiten', subs: [] },
-];
-const TAGE = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
-const MONATE = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+const MITARBEITER = ['Stefan Bertelmann','Christian Leyener','Zakir Memic','Thorsten Nitschke','Rainer Wurmbach','Isah Zeppenfeld'];
+const MA_SHORT = ['Stefan','Christian','Zakir','Thorsten','Rainer','Isah'];
+const SK = 'dienstplan_v1';
+const TAGE_KURZ = ['So','Mo','Di','Mi','Do','Fr','Sa'];
 const MONATE_LANG = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const MONATE_KURZ = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
 
-/* Rotationsplan-Konstanten */
-const ROT_TASKS = ['Reinigung','Kontrolle','Regeneinlaeufe']; // interner Schlüssel ohne Umlaut für IDs
-const ROT_TASK_LABEL = { Reinigung: 'Reinigung', Kontrolle: 'Kontrolle', Regeneinlaeufe: 'Regeneinläufe', Ratten: 'Ratten', Urlaub: 'Urlaub', Frei: 'Frei' };
-const RATTEN_LEUTE = ['Christian Leyener','Thorsten Nitschke'];
-const ROT_BLOCK_WOCHEN = 4;   // Länge einer regulären Zuweisung
-const RATTEN_ZYKLUS = 3;      // alle X Wochen 1 Woche Ratten
+const KATEGORIEN = [
+  { id: '',    label: '—',                  color: null,      textColor: null },
+  { id: 'K',   label: 'Kontrolle/Instandh.',color: '#FFC000', textColor: '#111' },
+  { id: 'R',   label: 'Reinigung',          color: '#92D050', textColor: '#111' },
+  { id: 'RE',  label: 'Regeneinläufe',      color: '#00B0F0', textColor: '#111' },
+  { id: 'Ra',  label: 'Ratten',             color: '#FFFF00', textColor: '#111' },
+  { id: 'S',   label: 'Sonstiges',          color: '#e0564a', textColor: 'white' },
+  { id: 'Fr',  label: 'Frei',               color: '#888',    textColor: 'white' },
+];
 
-let data = [];
-let dataLoaded = false;
-let urlaubData = [];
-let currentRotPlan = null; // zuletzt generierter (noch nicht gespeicherter) Plan
+const FEIERTAGE_NRW = {
+  '2025-01-01':'Neujahr', '2025-04-18':'Karfreitag', '2025-04-21':'Ostermontag',
+  '2025-05-01':'Tag der Arbeit', '2025-05-29':'Christi Himmelfahrt',
+  '2025-06-09':'Pfingstmontag', '2025-06-19':'Fronleichnam',
+  '2025-10-03':'Tag d. Dt. Einheit', '2025-11-01':'Allerheiligen',
+  '2025-12-25':'1. Weihnachtstag', '2025-12-26':'2. Weihnachtstag',
+  '2026-01-01':'Neujahr', '2026-04-03':'Karfreitag', '2026-04-06':'Ostermontag',
+  '2026-05-01':'Tag der Arbeit', '2026-05-14':'Christi Himmelfahrt',
+  '2026-05-25':'Pfingstmontag', '2026-06-04':'Fronleichnam',
+  '2026-10-03':'Tag d. Dt. Einheit', '2026-11-01':'Allerheiligen',
+  '2026-12-25':'1. Weihnachtstag', '2026-12-26':'2. Weihnachtstag',
+};
 
-/* =========================================================================
-   FIRESTORE: TAGESEINTRÄGE
-   ========================================================================= */
+// data[dateStr] = { entries: { 'Stefan Bertelmann': { text, kat } }, notiz }
+let data = {};
+let currentYear = 2026;
+let currentMonth = 6; // 0-indexed; default = Juli 2026 (today)
+
+let saveTimer = null;
+
+// ─── Storage (Firestore) ─────────────────────────────────────
 async function loadData() {
   try {
-    const snap = await db.collection('eintraege').get();
-    data = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-  } catch (err) {
-    console.error('Ladefehler (eintraege):', err);
-    data = [];
-  }
-  dataLoaded = true;
+    const snap = await db.collection('dienstplan_app').doc('monatsdaten').get();
+    data = snap.exists ? (snap.data().data || {}) : {};
+  } catch (err) { console.error('Ladefehler (monatsdaten):', err); data = {}; }
 }
 
-async function saveEntries(newEntries) {
+async function saveData() {
   try {
-    const batch = db.batch();
-    newEntries.forEach(e => {
-      const ref = db.collection('eintraege').doc();
-      batch.set(ref, e);
-    });
-    await batch.commit();
+    await db.collection('dienstplan_app').doc('monatsdaten').set({ data });
     return true;
-  } catch (err) {
-    console.error('Speicherfehler (eintraege):', err);
-    return false;
-  }
+  } catch (err) { console.error('Speicherfehler (monatsdaten):', err); return false; }
 }
 
-async function deleteEntry(id) {
-  if (!confirm('Eintrag löschen?')) return;
-  try {
-    await db.collection('eintraege').doc(id).delete();
-  } catch (err) {
-    console.error('Löschfehler:', err);
-    alert('Löschen fehlgeschlagen.');
-    return;
-  }
-  await loadData();
-  const d = document.getElementById('einDatum').value;
-  loadDayPreview(d); renderLog(); renderStats(); renderMatrix(); buildMonthTabs();
-}
-
-function dayHours(dateStr) { const d = new Date(dateStr + 'T12:00:00'); return d.getDay() === 5 ? 6 : 8.25; }
-function dayName(dateStr) { const d = new Date(dateStr + 'T12:00:00'); return TAGE[d.getDay()]; }
-function fmtN(h) { return (!h || h === 0) ? '—' : h.toFixed(2).replace('.',','); }
-function slug(s) { return s.replace(/[^a-z0-9]/gi,'_'); }
-
-function getPeriodFilter(period, monthVal) {
-  return (dateStr) => {
-    if (!dateStr) return false;
-    const d = new Date(dateStr + 'T12:00:00'); const m = d.getMonth();
-    if (period === 'year') return true;
-    if (period === 'q1') return m < 3;
-    if (period === 'q2') return m >= 3 && m < 6;
-    if (period === 'q3') return m >= 6 && m < 9;
-    if (period === 'q4') return m >= 9;
-    if (period === 'month') return m === parseInt(monthVal);
-    return true;
-  };
-}
-
-let selectedMA = new Set();
-let selectedFZ = new Set();
-
-async function startApp() {
-  const today = new Date().toISOString().slice(0,10);
-  document.getElementById('hdrDate').textContent = new Date().toLocaleDateString('de-DE', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
-  document.getElementById('einDatum').value = today;
-  document.getElementById('rotYear').value = new Date().getFullYear();
-  document.getElementById('rotMonth').value = new Date().getMonth();
-  buildMAPills(); buildFZPills(); buildTatBlocks(); buildUrlaubSelect();
-
-  setSyncStatus('Lade Daten aus Firestore…');
-  await Promise.all([loadData(), loadUrlaub()]);
-  setSyncStatus('✓ Verbunden mit Firestore', true);
-
-  onDateChange();
-  populateFilters(); renderLog(); renderStats(); renderMatrix(); buildMonthTabs(); renderUrlaub();
+function scheduleSave() {
+  if (saveTimer) clearTimeout(saveTimer);
+  setSyncStatus2('Speichere…', false);
+  saveTimer = setTimeout(async () => {
+    const ok = await saveData();
+    setSyncStatus2(ok ? '✓ Gespeichert' : '✗ Fehler', ok);
+  }, 700);
 }
 
 function setSyncStatus(text, ok) {
   const el = document.getElementById('syncStatus');
-  if (!el) return;
-  el.textContent = text;
-  el.style.color = ok ? 'var(--green)' : 'var(--muted)';
+  if (el) { el.textContent = text; el.style.color = ok ? 'var(--green)' : 'var(--muted)'; }
+}
+function setSyncStatus2(text, ok) {
+  const el = document.getElementById('syncStatus2');
+  if (el) { el.textContent = text; el.style.color = ok ? 'var(--green)' : 'var(--muted)'; }
 }
 
-async function showSection(s) {
+// ─── Navigation ────────────────────────────────────────────
+async function showSection(s, btn) {
   document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
   document.getElementById('sec-'+s).classList.add('active');
-  event.target.classList.add('active');
-  if (s === 'statistik' || s === 'matrix' || s === 'uebersicht') {
-    setSyncStatus('Aktualisiere…');
-    await loadData();
-    setSyncStatus('✓ Verbunden mit Firestore', true);
+  btn.classList.add('active');
+  if (s === 'uebersicht') { populateOvFilters(); renderOverview(); }
+  if (s === 'rotation') {
+    await Promise.all([loadRotData(), loadUrlaub()]);
+    renderRotation();
+    renderUrlaubListe();
   }
-  if (s === 'statistik') renderStats();
-  if (s === 'matrix') renderMatrix();
-  if (s === 'uebersicht') { renderLog(); buildMonthTabs(); }
-  if (s === 'urlaub') { await loadUrlaub(); renderUrlaub(); }
 }
 
-function onDateChange() {
-  const d = document.getElementById('einDatum').value;
-  if (!d) return;
-  document.getElementById('dayName').textContent = dayName(d);
-  document.getElementById('dayHours').textContent = dayHours(d) + ' h';
-  updateSummary();
-  loadDayPreview(d);
+function changeMonth(dir) {
+  currentMonth += dir;
+  if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+  if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+  renderGrid();
 }
 
-function buildMAPills() {
-  document.getElementById('maPills').innerHTML = MITARBEITER.map(m => `
-    <div class="pill ma" id="pill-ma-${slug(m)}" onclick="toggleMA('${m}')"><span class="check">✓ </span>${m}</div>`).join('');
-}
-function toggleMA(m) {
-  if (selectedMA.has(m)) selectedMA.delete(m); else selectedMA.add(m);
-  document.getElementById('pill-ma-'+slug(m)).classList.toggle('active', selectedMA.has(m));
-  updateSummary();
+// ─── Helpers ───────────────────────────────────────────────
+function pad(n) { return String(n).padStart(2,'0'); }
+
+function dateStr(y, m, d) { return `${y}-${pad(m+1)}-${pad(d)}`; }
+
+function getISOWeek(date) {
+  const d = new Date(date); d.setHours(12);
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  const y1 = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil((((d - y1) / 86400000) + 1) / 7);
 }
 
-function buildFZPills() {
-  document.getElementById('fzPills').innerHTML = FAHRZEUGE.map(v => `
-    <div class="pill fz" id="pill-fz-${slug(v)}" onclick="toggleFZ('${v}')"><span class="check">✓ </span>${v}</div>`).join('');
-}
-function toggleFZ(v) {
-  if (selectedFZ.has(v)) selectedFZ.delete(v); else selectedFZ.add(v);
-  document.getElementById('pill-fz-'+slug(v)).classList.toggle('active', selectedFZ.has(v));
+function fmtDate(ds) {
+  const [y,m,d] = ds.split('-');
+  return `${d}.${m}.`;
 }
 
-function buildTatBlocks() {
-  const wrap = document.getElementById('tatBlocks');
-  const quickBtns = (id) => [3, 4, 4.25].map(v => `<button type="button" class="qbtn" onclick="setQuick('${id}', ${v})">${v.toString().replace('.', ',')}h</button>`).join('');
+function entryData(ds) {
+  if (!data[ds]) data[ds] = { entries: {}, notiz: '' };
+  return data[ds];
+}
+
+function maEntry(ds, ma) {
+  const d = entryData(ds);
+  if (!d.entries[ma]) d.entries[ma] = { text: '', kat: '' };
+  return d.entries[ma];
+}
+
+function katInfo(id) { return KATEGORIEN.find(k => k.id === id) || KATEGORIEN[0]; }
+
+function applyKatStyle(sel, kat) {
+  const k = katInfo(kat);
+  if (k.color) {
+    sel.style.background = k.color;
+    sel.style.color = k.textColor;
+    sel.style.borderColor = k.color;
+  } else {
+    sel.style.background = 'var(--bg)';
+    sel.style.color = 'var(--muted)';
+    sel.style.borderColor = 'var(--border)';
+  }
+}
+
+// ─── Grid rendering ────────────────────────────────────────
+function renderGrid() {
+  const y = currentYear, m = currentMonth;
+  document.getElementById('monthTitle').textContent = `${MONATE_LANG[m]} ${y}`;
+
+  // Header
+  const head = document.getElementById('gridHead');
+  head.innerHTML = `<tr>
+    <th class="th-date">Datum</th>
+    <th class="th-day">Tag</th>
+    <th class="th-kw">KW</th>
+    ${MITARBEITER.map((ma, i) => `<th class="th-ma">${MA_SHORT[i]}</th>`).join('')}
+    <th class="th-notiz">📝 Tagesnotiz</th>
+  </tr>`;
+
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  let lastKW = null;
   let html = '';
-  TAETIGKEITEN.forEach(t => {
-    if (t.subs.length === 0) {
-      const id = slug(t.group);
-      html += `<div class="tat-block" id="tb-${id}">
-        <div class="tat-block-head"><span class="tat-block-title">${t.group}</span></div>
-        <div class="quick-row">${quickBtns(id)}</div>
-        <div class="tat-block-input-row"><span style="font-size:11px;color:var(--muted);">Stunden</span>
-        <input type="number" min="0" max="24" step="0.25" placeholder="0" id="h-${id}" oninput="updateBlockState('${id}'); updateSummary();"></div>
-      </div>`;
-    } else {
-      t.subs.forEach(sub => {
-        const key = t.group + '__' + sub;
-        const id = slug(key);
-        html += `<div class="tat-block" id="tb-${id}">
-          <div class="tat-block-head"><span class="tat-block-title">${t.group} / ${sub}</span></div>
-          <div class="quick-row">${quickBtns(id)}</div>
-          <div class="tat-block-input-row"><span style="font-size:11px;color:var(--muted);">Stunden</span>
-          <input type="number" min="0" max="24" step="0.25" placeholder="0" id="h-${id}" oninput="updateBlockState('${id}'); updateSummary();"></div>
-        </div>`;
-      });
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const ds = dateStr(y, m, day);
+    const dateObj = new Date(y, m, day, 12);
+    const dow = dateObj.getDay(); // 0=So,6=Sa
+    const isWeekend = dow === 0 || dow === 6;
+    const isoKW = getISOWeek(dateObj);
+    const feiertag = FEIERTAGE_NRW[ds] || null;
+    const tagKurz = TAGE_KURZ[dow];
+
+    // KW separator row
+    if (isoKW !== lastKW) {
+      html += `<tr class="row-kw"><td colspan="${3 + MITARBEITER.length + 1}" class="td-kw-label">KW ${isoKW}</td></tr>`;
+      lastKW = isoKW;
     }
-  });
-  wrap.innerHTML = html;
-}
 
-function setQuick(id, val) {
-  const inp = document.getElementById('h-'+id);
-  inp.value = (parseFloat(inp.value) || 0) === val ? '' : val;
-  updateBlockState(id);
-  updateSummary();
-}
+    const rowClass = feiertag ? 'row-day is-holiday' : isWeekend ? 'row-day is-weekend' : 'row-day';
+    html += `<tr class="${rowClass}" data-date="${ds}">`;
 
-function updateBlockState(id) {
-  const val = parseFloat(document.getElementById('h-'+id).value) || 0;
-  document.getElementById('tb-'+id).classList.toggle('has-hours', val > 0);
-  document.querySelectorAll('#tb-'+id+' .qbtn').forEach(b => {
-    const bVal = parseFloat(b.textContent.replace('h','').replace(',','.'));
-    b.classList.toggle('active', bVal === val);
-  });
-}
+    // Date cell
+    html += `<td class="td-date">${fmtDate(ds)}${feiertag ? `<span class="holiday-label">🔴 ${feiertag}</span>` : ''}</td>`;
+    html += `<td class="td-day">${tagKurz}</td>`;
+    html += `<td class="td-kw" rowspan="1"></td>`;
 
-function updateSummary() {
-  const bar = document.getElementById('summaryBar');
-  if (selectedMA.size === 0) {
-    bar.innerHTML = '<div style="font-size:13px;color:var(--muted);">Wähle zuerst das Team aus, um die Stundenübersicht zu sehen.</div>';
-    return;
+    // MA cells
+    const dayData = data[ds] || { entries: {}, notiz: '' };
+    MITARBEITER.forEach(ma => {
+      const entry = dayData.entries?.[ma] || { text: '', kat: '' };
+      const katOpts = KATEGORIEN.map(k =>
+        `<option value="${k.id}" ${entry.kat === k.id ? 'selected' : ''}>${k.label}</option>`
+      ).join('');
+      const k = katInfo(entry.kat);
+      const katBg = k.color ? `background:${k.color};color:${k.textColor};border-color:${k.color};` : '';
+      html += `<td class="td-ma">
+        <div class="cell-inner">
+          <select class="kat-sel" style="${katBg}" data-date="${ds}" data-ma="${ma}" onchange="onKatChange(this)">${katOpts}</select>
+          <input type="text" class="cell-input" data-date="${ds}" data-ma="${ma}"
+            value="${(entry.text||'').replace(/"/g,'&quot;')}"
+            placeholder="${isWeekend && !feiertag ? '' : 'Eintrag…'}"
+            oninput="onTextChange(this)">
+        </div>
+      </td>`;
+    });
+
+    // Notiz cell
+    const notiz = dayData.notiz || '';
+    html += `<td class="td-notiz">
+      <input type="text" class="notiz-input" data-date="${ds}"
+        value="${notiz.replace(/"/g,'&quot;')}"
+        placeholder="Notiz für alle…"
+        oninput="onNotizChange(this)">
+    </td>`;
+
+    html += '</tr>';
   }
-  const d = document.getElementById('einDatum').value;
-  const max = d ? dayHours(d) : 8.25;
-  let totalEntered = 0;
-  document.querySelectorAll('#tatBlocks input[type=number]').forEach(inp => { totalEntered += parseFloat(inp.value) || 0; });
 
-  let html = '';
-  selectedMA.forEach(m => {
-    const pct = Math.min(totalEntered / max * 100, 100);
-    const over = totalEntered > max;
-    html += `<div class="summary-item"><span class="name">${m.split(' ')[0]}</span>
-      <div class="hours-bar"><div class="hours-bar-fill ${over?'over':''}" style="width:${pct}%"></div></div>
-      <span class="hours-val ${over?'over':(totalEntered>0?'ok':'')}">${totalEntered.toFixed(2).replace('.',',')} / ${max} h</span></div>`;
-  });
-  bar.innerHTML = html;
+  document.getElementById('gridBody').innerHTML = html;
 }
 
-async function saveDay() {
-  const d = document.getElementById('einDatum').value;
-  if (!d) { alert('Bitte Datum wählen.'); return; }
-  if (selectedMA.size === 0) { alert('Bitte mindestens einen Mitarbeiter auswählen.'); return; }
-
-  const vehicles = [...selectedFZ];
-  let addedEntries = 0;
-  const newEntries = [];
-
-  TAETIGKEITEN.forEach(t => {
-    if (t.subs.length === 0) {
-      const inp = document.getElementById('h-'+slug(t.group));
-      const h = parseFloat(inp.value) || 0;
-      if (h > 0) selectedMA.forEach(ma => { newEntries.push({ date: d, ma, tat: t.group, sub: '', vehicles, hours: h }); addedEntries++; });
-    } else {
-      t.subs.forEach(sub => {
-        const key = slug(t.group + '__' + sub);
-        const inp = document.getElementById('h-'+key);
-        const h = parseFloat(inp.value) || 0;
-        if (h > 0) selectedMA.forEach(ma => { newEntries.push({ date: d, ma, tat: t.group, sub, vehicles, hours: h }); addedEntries++; });
-      });
-    }
-  });
-
-  if (addedEntries === 0) { alert('Bitte mindestens eine Tätigkeit mit Stunden erfassen.'); return; }
-
-  const msg = document.getElementById('saveMsg');
-  msg.style.color = 'var(--muted)';
-  msg.textContent = 'Speichere…';
-
-  const ok = await saveEntries(newEntries);
-  if (!ok) {
-    msg.style.color = 'var(--red)';
-    msg.textContent = '✗ Speichern fehlgeschlagen. Bitte erneut versuchen.';
-    return;
-  }
-  await loadData();
-
-  msg.style.color = 'var(--green)';
-  msg.textContent = `✓ ${addedEntries} Einträge für ${selectedMA.size} Mitarbeiter gespeichert!`;
-  setTimeout(() => { msg.textContent = ''; }, 4000);
-
-  resetForm();
-  loadDayPreview(d);
-  renderStats();
+// ─── Input handlers ────────────────────────────────────────
+function onTextChange(el) {
+  const { date, ma } = el.dataset;
+  maEntry(date, ma).text = el.value;
+  scheduleSave();
 }
 
-function resetForm() {
-  selectedMA.clear(); selectedFZ.clear();
-  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('#tatBlocks input[type=number]').forEach(inp => { inp.value = ''; });
-  document.querySelectorAll('.tat-block').forEach(b => b.classList.remove('has-hours'));
-  document.querySelectorAll('.qbtn').forEach(b => b.classList.remove('active'));
-  updateSummary();
+function onKatChange(el) {
+  const { date, ma } = el.dataset;
+  maEntry(date, ma).kat = el.value;
+  applyKatStyle(el, el.value);
+  scheduleSave();
 }
 
-function loadDayPreview(d) {
-  const entries = data.filter(e => e.date === d);
-  const card = document.getElementById('dayPreviewCard');
-  const prev = document.getElementById('dayPreview');
-  if (entries.length === 0) { card.style.display = 'none'; return; }
-  card.style.display = 'block';
-  let html = '<table class="log-table"><thead><tr><th>Mitarbeiter</th><th>Tätigkeit</th><th>Fahrzeuge</th><th>Stunden</th><th></th></tr></thead><tbody>';
-  entries.forEach(e => {
-    html += `<tr><td><b>${e.ma}</b></td><td>${e.tat}${e.sub?' / '+e.sub:''}</td>
-    <td>${(e.vehicles||[]).map(v=>`<span class="tag v">${v}</span>`).join('')}</td>
-    <td><b>${fmtN(e.hours)}</b></td>
-    <td><button class="btn btn-red btn-sm" onclick="deleteEntry('${e.id}')">✕</button></td></tr>`;
-  });
-  html += '</tbody></table>';
-  prev.innerHTML = html;
+function onNotizChange(el) {
+  const ds = el.dataset.date;
+  entryData(ds).notiz = el.value;
+  scheduleSave();
 }
 
-function populateFilters() {
-  const maS = document.getElementById('filterMA'); const fzS = document.getElementById('filterFZ');
-  MITARBEITER.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; maS.appendChild(o); });
-  FAHRZEUGE.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; fzS.appendChild(o); });
-}
+// ─── Overview ──────────────────────────────────────────────
+function populateOvFilters() {
+  const mSel = document.getElementById('ovMonth');
+  const maSel = document.getElementById('ovMA');
+  const existing = [...mSel.options].map(o => o.value);
 
-function buildMonthTabs() {
-  const tabs = document.getElementById('monthTabs');
-  tabs.innerHTML = '<div class="month-tab active" data-m="" onclick="setMonth(this, \'\')">Alle</div>';
-  const months = [...new Set(data.map(e => e.date?.slice(0,7)))].filter(Boolean).sort();
+  // Months from data keys
+  const months = [...new Set(Object.keys(data).map(d => d.slice(0,7)))].sort();
   months.forEach(m => {
-    const [y,mo] = m.split('-');
-    tabs.innerHTML += `<div class="month-tab" data-m="${m}" onclick="setMonth(this,'${m}')">${MONATE[parseInt(mo)-1]} ${y}</div>`;
+    if (!existing.includes(m)) {
+      const [y, mo] = m.split('-');
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = `${MONATE_KURZ[parseInt(mo)-1]} ${y}`;
+      mSel.appendChild(opt);
+    }
   });
-}
-let logMonthFilter = '';
-function setMonth(el, m) {
-  document.querySelectorAll('.month-tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active'); logMonthFilter = m; renderLog();
+
+  if (maSel.options.length === 1) {
+    MITARBEITER.forEach(ma => {
+      const opt = document.createElement('option');
+      opt.value = ma; opt.textContent = ma; maSel.appendChild(opt);
+    });
+  }
 }
 
-function renderLog() {
-  const ma = document.getElementById('filterMA').value;
-  const fz = document.getElementById('filterFZ').value;
-  const tbody = document.getElementById('logBody'); const empty = document.getElementById('logEmpty');
-  let entries = [...data].sort((a,b) => b.date.localeCompare(a.date));
-  if (logMonthFilter) entries = entries.filter(e => e.date?.startsWith(logMonthFilter));
-  if (ma) entries = entries.filter(e => e.ma === ma);
-  if (fz) entries = entries.filter(e => (e.vehicles||[]).includes(fz));
-  if (entries.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+function renderOverview() {
+  const filterM = document.getElementById('ovMonth').value;
+  const filterMA = document.getElementById('ovMA').value;
+  const filterKat = document.getElementById('ovKat').value;
+  const tbody = document.getElementById('ovBody');
+  const empty = document.getElementById('ovEmpty');
+
+  let rows = [];
+  Object.entries(data).sort((a,b) => b[0].localeCompare(a[0])).forEach(([ds, day]) => {
+    if (filterM && !ds.startsWith(filterM)) return;
+    Object.entries(day.entries || {}).forEach(([ma, entry]) => {
+      if (!entry.text && !entry.kat) return;
+      if (filterMA && ma !== filterMA) return;
+      if (filterKat && entry.kat !== filterKat) return;
+      const dateObj = new Date(ds + 'T12:00:00');
+      rows.push({ ds, ma, entry, notiz: day.notiz || '', tag: TAGE_KURZ[dateObj.getDay()] });
+    });
+  });
+
+  if (rows.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
   empty.style.display = 'none';
-  tbody.innerHTML = entries.map(e => {
-    return `<tr><td>${e.date}</td><td>${dayName(e.date)}</td><td><b>${e.ma}</b></td><td>${e.tat}${e.sub?' / '+e.sub:''}</td>
-      <td>${(e.vehicles||[]).map(v=>`<span class="tag v">${v}</span>`).join('') || '—'}</td>
-      <td><b>${fmtN(e.hours)}</b></td><td><button class="btn btn-red btn-sm" onclick="deleteEntry('${e.id}')">✕</button></td></tr>`;
+
+  tbody.innerHTML = rows.map(r => {
+    const k = katInfo(r.entry.kat);
+    const badge = k.color
+      ? `<span class="kat-badge" style="background:${k.color};color:${k.textColor}">${k.label}</span>`
+      : '<span style="color:var(--muted)">—</span>';
+    return `<tr>
+      <td>${fmtDate(r.ds)}<span style="font-size:10px;color:var(--muted)"> ${r.ds.slice(0,4)}</span></td>
+      <td>${r.tag}</td>
+      <td><b>${r.ma}</b></td>
+      <td>${badge}</td>
+      <td>${r.entry.text || '—'}</td>
+      <td style="color:var(--muted);font-style:italic">${r.notiz || ''}</td>
+    </tr>`;
   }).join('');
 }
 
-function renderStats() {
-  const period = document.getElementById('statPeriod').value;
-  const monthEl = document.getElementById('statMonth');
-  monthEl.style.display = period === 'month' ? 'block' : 'none';
-  const monthVal = parseInt(monthEl.value);
-  const view = document.getElementById('statView').value;
-  const filter = getPeriodFilter(period, monthVal);
-  const filtered = data.filter(e => filter(e.date));
+// ─── Rotationsplan ─────────────────────────────────────────
+// rotData[wk] = { employees: { 'Name': { task:'Reinigung', note:'' } }, note:'' }
+let rotData = {};
+let rotSaveTimer = null;
 
-  const totalH = filtered.reduce((s,e) => s + (e.hours||0), 0);
-  const days = [...new Set(filtered.map(e => e.date))].length;
-  document.getElementById('kpiCards').innerHTML = `
-    <div class="stat-card"><div class="val">${totalH.toFixed(1).replace('.',',')}</div><div class="lbl">Gesamtstunden</div></div>
-    <div class="stat-card"><div class="val">${days}</div><div class="lbl">Arbeitstage</div></div>
-    <div class="stat-card"><div class="val">${filtered.length}</div><div class="lbl">Einträge</div></div>
-    <div class="stat-card"><div class="val">${days>0?(totalH/days).toFixed(1).replace('.',','):0}</div><div class="lbl">Ø Stunden/Tag</div></div>`;
+const ROT_TASKS = ['Reinigung','Kontrolle','Regeneinlaeufe']; // rotieren im 4-Wochen-Rhythmus, je 2 Personen
+const RATTEN_LEUTE = ['Christian Leyener','Thorsten Nitschke']; // exklusiv für Ratten
+const ROT_BLOCK_WOCHEN = 4;  // Länge einer regulären Zuweisung je Aufgabe
+const RATTEN_ZYKLUS = 3;     // alle X Wochen ist 1 Woche Ratten fällig
+const TASK_LABEL = { Reinigung:'Reinigung', Kontrolle:'Kontrolle', Regeneinlaeufe:'Regeneinläufe', Ratten:'Ratten', Urlaub:'Urlaub', Frei:'Frei' };
 
-  const thead = document.getElementById('statHead'); const tbody = document.getElementById('statBody'); const empty = document.getElementById('statEmpty');
-  if (filtered.length === 0) { thead.innerHTML = ''; tbody.innerHTML = ''; empty.style.display = 'block'; return; }
-  empty.style.display = 'none';
-
-  if (view === 'activity') {
-    const rows = {};
-    filtered.forEach(e => {
-      const key = e.tat + (e.sub ? ' / ' + e.sub : '');
-      if (!rows[key]) rows[key] = { group: e.tat, sub: e.sub || '', byMA: {} };
-      rows[key].byMA[e.ma] = (rows[key].byMA[e.ma]||0) + (e.hours||0);
-    });
-    thead.innerHTML = `<tr><th>Tätigkeit</th><th>Unterkategorie</th>${MITARBEITER.map(m=>`<th class="num">${m.split(' ')[0]}</th>`).join('')}<th class="num">Gesamt</th></tr>`;
-    const grouped = {};
-    Object.entries(rows).forEach(([k,v]) => { if (!grouped[v.group]) grouped[v.group] = []; grouped[v.group].push({key:k, ...v}); });
-    let html = ''; let grandTotal = 0; const maTotals = {}; MITARBEITER.forEach(m => maTotals[m] = 0);
-    TAETIGKEITEN.forEach(t => {
-      const items = grouped[t.group]; if (!items) return;
-      items.forEach(row => {
-        let rowTotal = 0;
-        const cells = MITARBEITER.map(m => { const h = row.byMA[m] || 0; rowTotal += h; maTotals[m] += h; return `<td class="num">${h > 0 ? fmtN(h) : ''}</td>`; }).join('');
-        grandTotal += rowTotal;
-        html += `<tr><td>${row.group}</td><td>${row.sub || '—'}</td>${cells}<td class="num"><b>${fmtN(rowTotal)}</b></td></tr>`;
-      });
-    });
-    html += `<tr class="total-row"><td colspan="2"><b>GESAMT</b></td>${MITARBEITER.map(m=>`<td class="num"><b>${fmtN(maTotals[m])}</b></td>`).join('')}<td class="num"><b>${fmtN(grandTotal)}</b></td></tr>`;
-    tbody.innerHTML = html;
-  } else if (view === 'employee') {
-    const rows = {};
-    filtered.forEach(e => { if (!rows[e.ma]) rows[e.ma] = {}; const k = e.tat + (e.sub ? ' / '+e.sub : ''); rows[e.ma][k] = (rows[e.ma][k] || 0) + (e.hours||0); });
-    thead.innerHTML = `<tr><th>Mitarbeiter</th><th>Tätigkeit</th><th class="num">Stunden</th></tr>`;
-    let html = '';
-    MITARBEITER.forEach(ma => {
-      if (!rows[ma]) return;
-      const entries2 = Object.entries(rows[ma]).sort((a,b) => b[1]-a[1]);
-      const total = entries2.reduce((s,[,h]) => s+h, 0);
-      entries2.forEach(([k,h], i) => { html += `<tr><td>${i===0?`<b>${ma}</b>`:''}</td><td>${k}</td><td class="num">${fmtN(h)}</td></tr>`; });
-      html += `<tr class="total-row"><td><b>${ma}</b></td><td>Gesamt</td><td class="num"><b>${fmtN(total)}</b></td></tr>`;
-    });
-    tbody.innerHTML = html;
-  } else if (view === 'vehicle') {
-    const rows = {};
-    filtered.forEach(e => { (e.vehicles||[]).forEach(v => { const k = e.tat + (e.sub?' / '+e.sub:''); if (!rows[v]) rows[v] = {}; rows[v][k] = (rows[v][k]||0) + (e.hours||0); }); });
-    thead.innerHTML = `<tr><th>Fahrzeug</th><th>Tätigkeit</th><th class="num">Stunden</th></tr>`;
-    let html = '';
-    FAHRZEUGE.forEach(v => {
-      if (!rows[v]) return;
-      const entries2 = Object.entries(rows[v]).sort((a,b) => b[1]-a[1]);
-      const total = entries2.reduce((s,[,h]) => s+h, 0);
-      entries2.forEach(([k,h], i) => { html += `<tr><td>${i===0?`<b>${v}</b>`:''}</td><td>${k}</td><td class="num">${fmtN(h)}</td></tr>`; });
-      html += `<tr class="total-row"><td><b>${v}</b></td><td>Gesamt</td><td class="num"><b>${fmtN(total)}</b></td></tr>`;
-    });
-    if (!html) html = `<tr><td colspan="3" class="empty-state">Keine Fahrzeugdaten.</td></tr>`;
-    tbody.innerHTML = html;
-  }
+async function loadRotData() {
+  try {
+    const snap = await db.collection('dienstplan_app').doc('rotation').get();
+    rotData = snap.exists ? (snap.data().rotData || {}) : {};
+  } catch (err) { console.error('Ladefehler (rotation):', err); rotData = {}; }
 }
 
-function renderMatrix() {
-  const period = document.getElementById('matPeriod').value;
-  const filter = getPeriodFilter(period, 0);
-  const filtered = data.filter(e => filter(e.date));
-  const mat = {}; const allTats = [];
-  TAETIGKEITEN.forEach(t => { if (t.subs.length > 0) t.subs.forEach(s => allTats.push(t.group+' / '+s)); else allTats.push(t.group); });
-  FAHRZEUGE.forEach(v => { mat[v] = {}; allTats.forEach(t => mat[v][t] = 0); });
-  filtered.forEach(e => { const k = e.tat + (e.sub?' / '+e.sub:''); (e.vehicles||[]).forEach(v => { if (!mat[v]) mat[v] = {}; mat[v][k] = (mat[v][k]||0) + (e.hours||0); }); });
-  let maxVal = 0; FAHRZEUGE.forEach(v => allTats.forEach(t => { if (mat[v][t] > maxVal) maxVal = mat[v][t]; }));
-  function heatClass(h) { if (!h || h === 0) return 'heat-0'; const pct = h / maxVal; if (pct < 0.1) return 'heat-1'; if (pct < 0.3) return 'heat-2'; if (pct < 0.6) return 'heat-3'; return 'heat-4'; }
-  const activeTats = allTats.filter(t => FAHRZEUGE.some(v => mat[v][t] > 0));
-  let html = `<table class="matrix-table"><thead><tr><th class="row-h">Fahrzeug</th>${activeTats.map(t=>`<th title="${t}">${t.length>20?t.slice(0,18)+'…':t}</th>`).join('')}<th>Gesamt</th></tr></thead><tbody>`;
-  const colTotals = {}; activeTats.forEach(t => colTotals[t] = 0); let grandTotal = 0;
-  FAHRZEUGE.forEach(v => {
-    const rowTotal = activeTats.reduce((s,t) => s + (mat[v][t]||0), 0); if (rowTotal === 0) return; grandTotal += rowTotal;
-    html += `<tr><td class="row-label">${v}</td>`;
-    activeTats.forEach(t => { const h = mat[v][t] || 0; colTotals[t] = (colTotals[t]||0) + h; html += `<td class="${heatClass(h)}">${h > 0 ? fmtN(h) : ''}</td>`; });
-    html += `<td class="total-col">${fmtN(rowTotal)}</td></tr>`;
-  });
-  html += `<tr class="total-row"><td>Gesamt</td>${activeTats.map(t=>`<td>${fmtN(colTotals[t]||0)}</td>`).join('')}<td>${fmtN(grandTotal)}</td></tr></tbody></table>`;
-  document.getElementById('matrixWrap').innerHTML = activeTats.length ? html : '<div class="empty-state">Keine Daten.</div>';
-
-  const mat2 = {}; FAHRZEUGE.forEach(v => { mat2[v] = {}; MITARBEITER.forEach(m => mat2[v][m] = 0); });
-  filtered.forEach(e => { (e.vehicles||[]).forEach(v => { if (!mat2[v]) mat2[v] = {}; mat2[v][e.ma] = (mat2[v][e.ma]||0) + (e.hours||0); }); });
-  let maxVal2 = 0; FAHRZEUGE.forEach(v => MITARBEITER.forEach(m => { if (mat2[v][m] > maxVal2) maxVal2 = mat2[v][m]; }));
-  function hc2(h) { if (!h || h === 0) return 'heat-0'; const p = h / maxVal2; if (p < 0.1) return 'heat-1'; if (p < 0.3) return 'heat-2'; if (p < 0.6) return 'heat-3'; return 'heat-4'; }
-  let html2 = `<table class="matrix-table"><thead><tr><th class="row-h">Fahrzeug</th>${MITARBEITER.map(m=>`<th>${m.split(' ')[0]}</th>`).join('')}<th>Gesamt</th></tr></thead><tbody>`;
-  const colT2 = {}; MITARBEITER.forEach(m => colT2[m] = 0); let gt2 = 0;
-  FAHRZEUGE.forEach(v => {
-    const rt = MITARBEITER.reduce((s,m) => s + (mat2[v][m]||0), 0); if (rt === 0) return; gt2 += rt;
-    html2 += `<tr><td class="row-label">${v}</td>`;
-    MITARBEITER.forEach(m => { const h = mat2[v][m]||0; colT2[m] = (colT2[m]||0) + h; html2 += `<td class="${hc2(h)}">${h > 0 ? fmtN(h) : ''}</td>`; });
-    html2 += `<td class="total-col">${fmtN(rt)}</td></tr>`;
-  });
-  html2 += `<tr class="total-row"><td>Gesamt</td>${MITARBEITER.map(m=>`<td>${fmtN(colT2[m]||0)}</td>`).join('')}<td>${fmtN(gt2)}</td></tr></tbody></table>`;
-  document.getElementById('matrixMA').innerHTML = html2;
+async function saveRotData() {
+  try { await db.collection('dienstplan_app').doc('rotation').set({ rotData }); return true; }
+  catch (err) { console.error('Speicherfehler (rotation):', err); return false; }
 }
 
-function exportCSV() {
-  const period = document.getElementById('statPeriod').value;
-  const monthVal = parseInt(document.getElementById('statMonth').value);
-  const filter = getPeriodFilter(period, monthVal);
-  const filtered = data.filter(e => filter(e.date));
-  let csv = 'Datum;Tag;Mitarbeiter;Tätigkeit;Unterkategorie;Fahrzeuge;Stunden\n';
-  filtered.sort((a,b) => a.date.localeCompare(b.date)).forEach(e => {
-    csv += `${e.date};${dayName(e.date)};${e.ma};${e.tat};${e.sub||''};${(e.vehicles||[]).join('|')};${e.hours}\n`;
-  });
-  const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'Kanalplanung_Export.csv'; a.click();
+function scheduleRotSave() {
+  if (rotSaveTimer) clearTimeout(rotSaveTimer);
+  const el = document.getElementById('rotSyncStatus');
+  if (el) { el.textContent = 'Speichere…'; el.style.color = 'var(--muted)'; }
+  rotSaveTimer = setTimeout(async () => {
+    const ok = await saveRotData();
+    if (el) { el.textContent = ok ? '✓ Gespeichert' : '✗ Fehler'; el.style.color = ok ? 'var(--green)' : 'var(--red)'; }
+  }, 700);
 }
 
-/* =========================================================================
-   URLAUB / FREIE TAGE
-   ========================================================================= */
-function buildUrlaubSelect() {
-  document.getElementById('urlMA').innerHTML = MITARBEITER.map(m => `<option value="${m}">${m}</option>`).join('');
+function weekKey(year, kw) { return `${year}-W${String(kw).padStart(2,'0')}`; }
+
+function getWeekStart(year, kw) {
+  // Monday of ISO week
+  const jan4 = new Date(year, 0, 4, 12);
+  const w1Mon = new Date(jan4);
+  w1Mon.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7)); // Monday of week 1
+  const start = new Date(w1Mon);
+  start.setDate(start.getDate() + (kw - 1) * 7);
+  return start;
 }
+
+function fmtWeekRange(year, kw) {
+  const s = getWeekStart(year, kw);
+  const e = new Date(s); e.setDate(e.getDate() + 4); // Fri
+  const f = d => `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.`;
+  return `${f(s)}–${f(e)}`;
+}
+
+// ─── Urlaub / Frei (vor der Generierung einzutragen) ──────────
+let urlaubData = [];
 
 async function loadUrlaub() {
   try {
-    const snap = await db.collection('urlaub').get();
-    urlaubData = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-  } catch (err) {
-    console.error('Ladefehler (urlaub):', err);
-    urlaubData = [];
-  }
+    const snap = await db.collection('dienstplan_app').doc('urlaub').get();
+    urlaubData = snap.exists ? (snap.data().eintraege || []) : [];
+  } catch (err) { console.error('Ladefehler (urlaub):', err); urlaubData = []; }
+}
+
+async function saveUrlaub() {
+  try { await db.collection('dienstplan_app').doc('urlaub').set({ eintraege: urlaubData }); return true; }
+  catch (err) { console.error('Speicherfehler (urlaub):', err); return false; }
+}
+
+function buildUrlaubSelect() {
+  const sel = document.getElementById('urlMA');
+  if (sel) sel.innerHTML = MITARBEITER.map(m => `<option value="${m}">${m}</option>`).join('');
 }
 
 async function addUrlaub() {
@@ -922,330 +779,262 @@ async function addUrlaub() {
   const bis = document.getElementById('urlBis').value || von;
   const art = document.getElementById('urlArt').value;
   const msg = document.getElementById('urlMsg');
-  if (!von) { msg.textContent = 'Bitte mindestens ein "Von"-Datum wählen.'; return; }
-  if (bis < von) { msg.textContent = '"Bis" darf nicht vor "Von" liegen.'; return; }
+  if (!von) { msg.style.color = 'var(--red)'; msg.textContent = 'Bitte mindestens ein "Von"-Datum wählen.'; return; }
+  if (bis < von) { msg.style.color = 'var(--red)'; msg.textContent = '"Bis" darf nicht vor "Von" liegen.'; return; }
+  urlaubData.push({ ma, von, bis, art });
   msg.style.color = 'var(--muted)'; msg.textContent = 'Speichere…';
-  try {
-    await db.collection('urlaub').add({ ma, von, bis, art });
-    msg.style.color = 'var(--green)'; msg.textContent = '✓ Eingetragen.';
-    setTimeout(() => { msg.textContent = ''; }, 3000);
-  } catch (err) {
-    console.error(err);
-    msg.style.color = 'var(--red)'; msg.textContent = '✗ Speichern fehlgeschlagen.';
-    return;
-  }
-  await loadUrlaub(); renderUrlaub();
+  const ok = await saveUrlaub();
+  msg.style.color = ok ? 'var(--green)' : 'var(--red)';
+  msg.textContent = ok ? '✓ Eingetragen.' : '✗ Speichern fehlgeschlagen.';
+  if (ok) setTimeout(() => { msg.textContent = ''; }, 3000);
+  renderUrlaubListe();
 }
 
-async function deleteUrlaub(id) {
+async function deleteUrlaub(idx) {
   if (!confirm('Eintrag löschen?')) return;
-  try { await db.collection('urlaub').doc(id).delete(); } catch (err) { console.error(err); }
-  await loadUrlaub(); renderUrlaub();
+  urlaubData.splice(idx, 1);
+  await saveUrlaub();
+  renderUrlaubListe();
 }
 
-function renderUrlaub() {
+function renderUrlaubListe() {
   const tbody = document.getElementById('urlBody'); const empty = document.getElementById('urlEmpty');
-  const sorted = [...urlaubData].sort((a,b) => (a.von||'').localeCompare(b.von||''));
-  if (sorted.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
-  empty.style.display = 'none';
+  if (!tbody) return;
+  const sorted = urlaubData.map((e,i) => ({...e, i})).sort((a,b) => (a.von||'').localeCompare(b.von||''));
+  if (sorted.length === 0) { tbody.innerHTML = ''; if (empty) empty.style.display = 'block'; return; }
+  if (empty) empty.style.display = 'none';
   tbody.innerHTML = sorted.map(e => `<tr><td><b>${e.ma}</b></td><td>${e.art||'Urlaub'}</td><td>${e.von}</td><td>${e.bis}</td>
-    <td><button class="btn btn-red btn-sm" onclick="deleteUrlaub('${e.id}')">✕</button></td></tr>`).join('');
+    <td><button class="btn btn-sm" style="background:var(--red);color:white;" onclick="deleteUrlaub(${e.i})">✕</button></td></tr>`).join('');
 }
 
-/* Prüft ob ein Mitarbeiter an einem bestimmten Tag (YYYY-MM-DD) Urlaub/frei hat */
-function isUrlaubAt(ma, dateStr) {
-  return urlaubData.some(u => u.ma === ma && dateStr >= u.von && dateStr <= u.bis);
-}
-/* Prüft ob ein Mitarbeiter in einer Kalenderwoche (Mo-Fr, Arbeitstage) überwiegend (>=3 von 5 Tagen) Urlaub hat */
-function isUrlaubWeek(ma, weekStart) {
+/* Woche gilt als Urlaubswoche für ma, wenn an mind. 3 der 5 Arbeitstage (Mo–Fr) Urlaub/Frei eingetragen ist */
+function isUrlaubForWeek(ma, year, kw) {
+  const start = getWeekStart(year, kw);
   let count = 0;
-  for (let i = 0; i < 5; i++) { // Mo-Fr
-    const d = new Date(weekStart); d.setDate(d.getDate() + i);
-    const ds = d.toISOString().slice(0,10);
-    if (isUrlaubAt(ma, ds)) count++;
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    const ds = dateStr(d.getFullYear(), d.getMonth(), d.getDate());
+    if (urlaubData.some(u => u.ma === ma && ds >= u.von && ds <= u.bis)) count++;
   }
   return count >= 3;
 }
 
-/* =========================================================================
-   ROTATIONSPLAN
-   ========================================================================= */
-const EPOCH_MONDAY = new Date(Date.UTC(2020, 0, 6)); // ein beliebiger Montag als Referenz
-function mondayOf(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dow = (d.getUTCDay() + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - dow);
-  return d;
-}
-function weekIndex(date) {
-  const m = mondayOf(date);
-  return Math.round((m - EPOCH_MONDAY) / (7 * 86400000));
-}
-function isoWeekNumber(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = (d.getUTCDay() + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - dayNum + 3);
-  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  const diff = d - firstThursday;
-  return 1 + Math.round(diff / (7 * 86400000));
-}
-function fmtDate(d) { return d.toISOString().slice(0,10); }
-function fmtDateDe(d) { return d.toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'}); }
-
-function getMonthWeeks(year, monthIdx) {
-  const first = new Date(Date.UTC(year, monthIdx, 1));
-  const last = new Date(Date.UTC(year, monthIdx + 1, 0));
-  let cur = mondayOf(first);
-  const weeks = [];
-  while (cur <= last) {
-    const start = new Date(cur);
-    const end = new Date(cur); end.setUTCDate(end.getUTCDate() + 6);
-    weeks.push({ widx: weekIndex(start), start, end, kw: isoWeekNumber(start) });
-    cur = new Date(cur); cur.setUTCDate(cur.getUTCDate() + 7);
-  }
-  return weeks;
+// ─── Badges / manuelles Umschalten ────────────────────────────
+function renderBadge(task, note) {
+  const t = task || 'Frei';
+  return `<span class="st-badge st-${t}">${TASK_LABEL[t] || t}</span>${note ? `<span class="${note==='Vertretung' ? 'vertretung-flag' : 'uebergabe-flag'}">${note}</span>` : ''}`;
 }
 
-/* Default-Startzustand, falls noch kein rotation_meta-Dokument existiert.
-   Verteilt die 6 Mitarbeiter reihum auf 6 Slots (2 je Aufgabe). */
-function defaultRotationState(startWidx) {
+function cycleStatus(wk, ma) {
+  if (!rotData[wk]) rotData[wk] = { employees:{}, note:'' };
+  if (!rotData[wk].employees) rotData[wk].employees = {};
+  const isRT = RATTEN_LEUTE.includes(ma);
+  const cycle = isRT ? ['Reinigung','Kontrolle','Regeneinlaeufe','Ratten','Urlaub','Frei']
+                      : ['Reinigung','Kontrolle','Regeneinlaeufe','Urlaub','Frei'];
+  const cur = rotData[wk].employees[ma]?.task || 'Frei';
+  const nxt = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
+  rotData[wk].employees[ma] = { task: nxt, note: '' };
+  const cell = document.querySelector(`.rot-ma-cell[data-wkey="${wk}"][data-ma="${ma}"]`);
+  if (cell) cell.innerHTML = renderBadge(nxt, '');
+  refreshReinigungHint(wk);
+  scheduleRotSave();
+}
+
+function refreshReinigungHint(wk) {
+  const rd = rotData[wk];
+  const cnt = rd ? MITARBEITER.filter(m => rd.employees?.[m]?.task === 'Reinigung').length : 0;
+  const el = document.querySelector(`.reinigung-hint[data-wkey="${wk}"]`);
+  if (el) el.textContent = cnt < 2 ? `⚠ nur ${cnt}` : '';
+}
+
+// ─── Automatische Generierung ─────────────────────────────────
+/* Ermittelt für jeden Mitarbeiter die bisherige Wochenanzahl je Aufgabe aus
+   ALLEN bereits gespeicherten Jahren/Wochen (Fairness über die Zeit hinweg). */
+function computeTaskCounts(excludeYear) {
+  const counts = {};
+  MITARBEITER.forEach(m => counts[m] = { Reinigung:0, Kontrolle:0, Regeneinlaeufe:0, Ratten:0 });
+  Object.entries(rotData).forEach(([wk, rd]) => {
+    if (excludeYear && wk.startsWith(excludeYear + '-W')) return; // Zielspanne selbst nicht mitzählen, wird neu erzeugt
+    MITARBEITER.forEach(m => {
+      const t = rd.employees?.[m]?.task;
+      if (t && counts[m][t] !== undefined) counts[m][t]++;
+    });
+  });
+  return counts;
+}
+
+function autoGenRotation() {
+  const year  = parseInt(document.getElementById('genYear').value);
+  const start = parseInt(document.getElementById('genStartKW').value) || 1;
+  const firstC = document.getElementById('genRattenStart').value === 'C';
+
+  const taskCounts = computeTaskCounts(String(year));
+
+  // 6 Slots: je 2 je rotierender Aufgabe, Start-Besetzung reihum
+  const slotNames = [];
+  ROT_TASKS.forEach(t => slotNames.push(t + '-1', t + '-2'));
   const order = [...MITARBEITER];
   const slots = {};
-  const slotNames = [];
-  ROT_TASKS.forEach(t => { slotNames.push(t + '-1', t + '-2'); });
-  slotNames.forEach((sn, i) => {
-    slots[sn] = { employee: order[i % order.length], sinceWeek: startWidx };
-  });
-  const taskCounts = {};
-  MITARBEITER.forEach(m => { taskCounts[m] = { Reinigung: 0, Kontrolle: 0, Regeneinlaeufe: 0, Ratten: 0 }; });
-  return {
-    slots,
-    rattenAnchorWeek: startWidx,   // Woche, ab der der 3-Wochen-Ratten-Zyklus zählt
-    rattenPointer: 0,               // 0 = RATTEN_LEUTE[0] ist als nächstes dran, 1 = der andere
-    taskCounts
-  };
-}
+  slotNames.forEach((sn, i) => { slots[sn] = { employee: order[i % order.length], sinceKW: start }; });
 
-async function loadRotationMeta() {
-  try {
-    const docSnap = await db.collection('rotation_meta').doc('status').get();
-    if (docSnap.exists) return docSnap.data();
-  } catch (err) { console.error('Ladefehler (rotation_meta):', err); }
-  return null;
-}
+  let rattenIdx = firstC ? 0 : 1;
 
-async function loadAllRotationPlaene() {
-  try {
-    const snap = await db.collection('rotation_plaene').get();
-    return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-  } catch (err) { console.error('Ladefehler (rotation_plaene):', err); return []; }
-}
-
-/* Kernfunktion: erzeugt Wochen-Zuweisungen für den gewählten Monat, ausgehend
-   vom letzten gespeicherten Rotationsstand (oder einem Default-Start). */
-async function generatePlan() {
-  const year = parseInt(document.getElementById('rotYear').value);
-  const monthIdx = parseInt(document.getElementById('rotMonth').value);
-  const msg = document.getElementById('rotMsg');
-  msg.style.color = 'var(--muted)'; msg.textContent = 'Generiere Plan…';
-
-  await loadUrlaub();
-  let state = await loadRotationMeta();
-  const monthWeeks = getMonthWeeks(year, monthIdx);
-  const targetStart = monthWeeks[0].widx;
-  const targetEnd = monthWeeks[monthWeeks.length - 1].widx;
-
-  if (!state) {
-    state = defaultRotationState(targetStart);
-  }
-  // JSON-Kopie, damit das Original in Firestore unverändert bleibt, bis gespeichert wird
-  state = JSON.parse(JSON.stringify(state));
-
-  // Falls der gespeicherte Stand älter ist als der Zielmonat, Wochen dazwischen
-  // "simulieren" (nur Rotation fortschreiben, ohne sie im Ergebnis anzuzeigen),
-  // damit die Fortsetzung stimmt, auch wenn ein Monat übersprungen wurde.
-  let simFrom = Math.min(...Object.values(state.slots).map(s => s.sinceWeek), state.rattenAnchorWeek);
-  // rattenAnchorWeek allein reicht als unterer Anker; wir laufen einfach ab dem Tag nach
-  // dem letzten bekannten Zustand bis targetStart-1 durch, falls nötig:
-  let lastKnownWeek = state.lastProcessedWeek !== undefined ? state.lastProcessedWeek : (targetStart - 1);
-
-  const weeksOutput = [];
-  for (let w = Math.min(lastKnownWeek + 1, targetStart); w <= targetEnd; w++) {
-    const weekStart = new Date(EPOCH_MONDAY); weekStart.setUTCDate(weekStart.getUTCDate() + w * 7);
-    const inTargetMonth = w >= targetStart && w <= targetEnd;
-
-    // 1) Ratten bestimmen: alle RATTEN_ZYKLUS Wochen ab Anker ist 1 Woche Ratten fällig
-    const sinceAnchor = w - state.rattenAnchorWeek;
-    const isRattenWeek = sinceAnchor >= 0 && (sinceAnchor % RATTEN_ZYKLUS === 0);
+  for (let kw = start; kw <= 52; kw++) {
+    const wIdx = kw - start;
+    const isRattenWeek = wIdx % RATTEN_ZYKLUS === (RATTEN_ZYKLUS - 1); // jede 3. Woche
     let rattenPerson = null;
     if (isRattenWeek) {
-      rattenPerson = RATTEN_LEUTE[state.rattenPointer % RATTEN_LEUTE.length];
-      state.rattenPointer = (state.rattenPointer + 1) % RATTEN_LEUTE.length; // nächstes Mal der/die andere
+      rattenPerson = RATTEN_LEUTE[rattenIdx % RATTEN_LEUTE.length];
+      rattenIdx++;
     }
 
-    // 2) Slot-Rotation prüfen (alle ROT_BLOCK_WOCHEN Wochen neu besetzen)
-    Object.keys(state.slots).forEach(slotName => {
-      const slot = state.slots[slotName];
-      if (w - slot.sinceWeek >= ROT_BLOCK_WOCHEN) {
-        const taskKey = slotName.split('-')[0];
-        const busyThisWeek = new Set(Object.values(state.slots).map(s => s.employee));
-        if (rattenPerson) busyThisWeek.add(rattenPerson);
-        // Kandidaten: alle Mitarbeiter, die nicht schon einen anderen Slot besetzen
-        // und nicht diese Woche Ratten machen; Präferenz: wenigste bisherige Wochen in dieser Aufgabe
-        let candidates = MITARBEITER.filter(m => m !== slot.employee && !busyThisWeek.has(m));
-        if (candidates.length === 0) candidates = MITARBEITER.filter(m => m !== slot.employee);
-        candidates.sort((a,b) => (state.taskCounts[a][taskKey] - state.taskCounts[b][taskKey]));
-        const next = candidates[0] || slot.employee;
-        state.slots[slotName] = { employee: next, sinceWeek: w, handoverFrom: slot.employee };
+    // Slot-Rotation: nach ROT_BLOCK_WOCHEN neu besetzen (die neue Person startet
+    // in dieser Woche -> Übergabewoche, in der beide "sichtbar" die Aufgabe tragen)
+    slotNames.forEach(sn => {
+      const slot = slots[sn];
+      if (kw - slot.sinceKW >= ROT_BLOCK_WOCHEN) {
+        const taskKey = sn.split('-')[0];
+        const busy = new Set(slotNames.map(s2 => slots[s2].employee));
+        if (rattenPerson) busy.add(rattenPerson);
+        let cands = MITARBEITER.filter(m => m !== slot.employee && !busy.has(m));
+        if (!cands.length) cands = MITARBEITER.filter(m => m !== slot.employee);
+        cands.sort((a,b) => taskCounts[a][taskKey] - taskCounts[b][taskKey]);
+        slots[sn] = { employee: cands[0] || slot.employee, sinceKW: kw, handoverFrom: slot.employee };
       }
     });
 
-    // 3) Wochenzuweisung je Mitarbeiter ableiten
-    const assign = {}; // employee -> {task, note}
-    MITARBEITER.forEach(m => { assign[m] = { task: 'Frei', note: '' }; });
-
-    Object.keys(state.slots).forEach(slotName => {
-      const slot = state.slots[slotName];
-      const taskKey = slotName.split('-')[0];
-      assign[slot.employee] = { task: taskKey, note: (slot.handoverFrom && slot.sinceWeek === w) ? ('Übergabe von ' + slot.handoverFrom.split(' ')[0]) : '' };
+    // Wochenzuweisung ableiten
+    const assign = {};
+    MITARBEITER.forEach(m => assign[m] = { task: 'Frei', note: '' });
+    slotNames.forEach(sn => {
+      const slot = slots[sn];
+      const taskKey = sn.split('-')[0];
+      assign[slot.employee] = { task: taskKey, note: (slot.handoverFrom && slot.sinceKW === kw) ? ('Übergabe von ' + slot.handoverFrom.split(' ')[0]) : '' };
     });
     if (rattenPerson) assign[rattenPerson] = { task: 'Ratten', note: '' };
 
-    // 4) Urlaub anwenden (überschreibt Aufgaben-Zuweisung für die Woche)
-    MITARBEITER.forEach(m => {
-      if (isUrlaubWeek(m, weekStart)) assign[m] = { task: 'Urlaub', note: '' };
-    });
+    // Urlaub/Frei aus Vorab-Eintragung überschreibt die Aufgabe
+    MITARBEITER.forEach(m => { if (isUrlaubForWeek(m, year, kw)) assign[m] = { task: 'Urlaub', note: '' }; });
 
-    // 5) Reinigung-Mindestbesetzung (2) sicherstellen
-    let reinigungCount = MITARBEITER.filter(m => assign[m].task === 'Reinigung').length;
-    if (reinigungCount < 2) {
+    // Mindestbesetzung Reinigung = 2
+    let cnt = MITARBEITER.filter(m => assign[m].task === 'Reinigung').length;
+    if (cnt < 2) {
       const pool = MITARBEITER.filter(m => ['Kontrolle','Regeneinlaeufe'].includes(assign[m].task))
-        .sort((a,b) => (state.taskCounts[b].Reinigung - state.taskCounts[a].Reinigung)); // wer am längsten nicht Reinigung hatte zuerst? -> geringster Wert zuerst
-      pool.sort((a,b) => (state.taskCounts[a].Reinigung - state.taskCounts[b].Reinigung));
-      while (reinigungCount < 2 && pool.length) {
-        const cand = pool.shift();
-        assign[cand] = { task: 'Reinigung', note: 'Vertretung' };
-        reinigungCount++;
-      }
-      if (reinigungCount < 2) {
-        // Auch aus Urlaub/Frei ziehen, wenn wirklich niemand sonst verfügbar ist (Randfall) —
-        // wird NICHT automatisch gemacht, stattdessen als Hinweis markiert, manuell zu prüfen.
-      }
+        .sort((a,b) => taskCounts[a].Reinigung - taskCounts[b].Reinigung);
+      while (cnt < 2 && pool.length) { const c = pool.shift(); assign[c] = { task: 'Reinigung', note: 'Vertretung' }; cnt++; }
     }
 
-    // 6) Zähler fortschreiben (nur für Wochen, die tatsächlich im Zielmonat liegen,
-    //    damit die Fairness-Statistik nicht durch reine Vorlauf-Simulation verzerrt wird)
-    if (inTargetMonth) {
-      MITARBEITER.forEach(m => {
-        const t = assign[m].task;
-        if (state.taskCounts[m][t] !== undefined) state.taskCounts[m][t]++;
-      });
-      weeksOutput.push({
-        widx: w, kw: isoWeekNumber(weekStart), start: fmtDate(weekStart),
-        end: fmtDate(new Date(weekStart.getTime() + 6*86400000)),
-        assign
-      });
-    }
-    state.lastProcessedWeek = w;
+    // Zähler fortschreiben (für Fairness der restlichen Generierung in diesem Lauf)
+    MITARBEITER.forEach(m => { const t = assign[m].task; if (taskCounts[m][t] !== undefined) taskCounts[m][t]++; });
+
+    const wk = weekKey(year, kw);
+    const existingNote = rotData[wk]?.note || '';
+    const employees = {}; MITARBEITER.forEach(m => employees[m] = assign[m]);
+    rotData[wk] = { employees, note: existingNote };
   }
 
-  currentRotPlan = { year, monthIdx, weeks: weeksOutput, stateAfter: state };
-  renderRotationTable();
-  renderRotFairness(weeksOutput, 'rotFairnessMonth', 'Diesen Monat');
-  const allPlaene = await loadAllRotationPlaene();
-  renderCumulativeFairness(allPlaene, weeksOutput);
-
-  document.getElementById('rotSaveBtn').style.display = 'inline-block';
-  msg.style.color = 'var(--green)';
-  msg.textContent = `✓ Plan für ${MONATE_LANG[monthIdx]} ${year} generiert (${weeksOutput.length} Wochen). Vor dem Speichern bitte prüfen und bei Bedarf manuell anpassen.`;
+  renderRotation();
+  renderFairness();
+  scheduleRotSave();
 }
 
-function renderRotationTable() {
-  const wrap = document.getElementById('rotTableWrap');
-  if (!currentRotPlan) { wrap.innerHTML = ''; return; }
-  const taskOptions = ['Reinigung','Kontrolle','Regeneinlaeufe','Ratten','Urlaub','Frei'];
-  let html = `<table class="rot-table"><thead><tr><th style="text-align:left">Woche</th>${MITARBEITER.map(m=>`<th>${m.split(' ')[0]}<br><span style="font-weight:400;opacity:.7">${m.split(' ').slice(1).join(' ')}</span></th>`).join('')}</tr></thead><tbody>`;
-  currentRotPlan.weeks.forEach((wk, wi) => {
-    html += `<tr><td class="wk-col">KW ${wk.kw}<br><span style="font-weight:400;color:var(--muted)">${fmtDateDe(new Date(wk.start))}–${fmtDateDe(new Date(wk.end))}</span></td>`;
-    MITARBEITER.forEach(m => {
-      const a = currentRotPlan.weeks[wi].assign[m];
-      html += `<td>
-        <select class="rot-select t-${a.task}" onchange="editRotCell(${wi}, '${slug(m)}', this.value)" data-ma="${m}">
-          ${taskOptions.map(t => `<option value="${t}" ${t===a.task?'selected':''}>${ROT_TASK_LABEL[t]}</option>`).join('')}
-        </select>
-        ${a.note ? `<span class="vertretung-flag">${a.note}</span>` : ''}
-      </td>`;
-    });
-    html += '</tr>';
-  });
-  html += '</tbody></table>';
-  wrap.innerHTML = html;
+function clearRotation() {
+  if (!confirm('Rotationsplan für dieses Jahr zurücksetzen? Alle manuellen Änderungen gehen verloren.')) return;
+  const year = parseInt(document.getElementById('genYear').value);
+  for (let kw = 1; kw <= 52; kw++) delete rotData[weekKey(year, kw)];
+  renderRotation();
+  renderFairness();
+  scheduleRotSave();
 }
 
-function editRotCell(weekIdx, maSlug, newTask) {
-  const ma = MITARBEITER.find(m => slug(m) === maSlug);
-  if (!ma || !currentRotPlan) return;
-  currentRotPlan.weeks[weekIdx].assign[ma] = { task: newTask, note: currentRotPlan.weeks[weekIdx].assign[ma].note && newTask !== 'Frei' ? currentRotPlan.weeks[weekIdx].assign[ma].note : '' };
-  // Klassen des Dropdowns aktualisieren (Farbe)
-  renderRotationTable();
-  renderRotFairness(currentRotPlan.weeks, 'rotFairnessMonth', 'Diesen Monat');
-}
+function renderRotation() {
+  const year = parseInt(document.getElementById('genYear').value) || 2026;
 
-function renderRotFairness(weeks, targetId, label) {
-  const counts = {};
-  MITARBEITER.forEach(m => { counts[m] = { Reinigung:0, Kontrolle:0, Regeneinlaeufe:0, Ratten:0, Urlaub:0, Frei:0 }; });
-  weeks.forEach(wk => MITARBEITER.forEach(m => { const t = wk.assign[m].task; if (counts[m][t] !== undefined) counts[m][t]++; }));
-  const cols = ['Reinigung','Kontrolle','Regeneinlaeufe','Ratten'];
-  let html = `<table class="stats-table"><thead><tr><th>Mitarbeiter</th>${cols.map(c=>`<th class="num">${ROT_TASK_LABEL[c]}</th>`).join('')}</tr></thead><tbody>`;
-  MITARBEITER.forEach(m => {
-    html += `<tr><td><b>${m}</b></td>${cols.map(c=>`<td class="num">${counts[m][c]} Wo.</td>`).join('')}</tr>`;
-  });
-  html += '</tbody></table>';
-  document.getElementById(targetId).innerHTML = html;
-}
+  document.getElementById('rotHead').innerHTML = `<tr>
+    <th class="th-l">KW</th>
+    <th class="th-l">Mo–Fr</th>
+    ${MITARBEITER.map((ma,i) => `<th>${MA_SHORT[i]}</th>`).join('')}
+    <th>Reinigung</th>
+    <th class="th-l" style="min-width:140px;">Notiz</th>
+  </tr>`;
 
-function renderCumulativeFairness(allPlaene, currentWeeksNotYetSaved) {
-  const counts = {};
-  MITARBEITER.forEach(m => { counts[m] = { Reinigung:0, Kontrolle:0, Regeneinlaeufe:0, Ratten:0 }; });
-  allPlaene.forEach(p => (p.weeks||[]).forEach(wk => MITARBEITER.forEach(m => {
-    const a = wk.assign && wk.assign[m]; if (a && counts[m][a.task] !== undefined) counts[m][a.task]++;
-  })));
-  // Aktuell generierten (aber evtl. noch nicht gespeicherten) Monat testweise mitzählen,
-  // damit die Vorschau realistisch ist:
-  (currentWeeksNotYetSaved || []).forEach(wk => MITARBEITER.forEach(m => {
-    const t = wk.assign[m].task; if (counts[m][t] !== undefined) counts[m][t]++;
-  }));
-  const cols = ['Reinigung','Kontrolle','Regeneinlaeufe','Ratten'];
-  let html = `<table class="stats-table"><thead><tr><th>Mitarbeiter</th>${cols.map(c=>`<th class="num">${ROT_TASK_LABEL[c]}</th>`).join('')}<th class="num">Summe Wochen</th></tr></thead><tbody>`;
-  MITARBEITER.forEach(m => {
-    const sum = cols.reduce((s,c) => s + counts[m][c], 0);
-    html += `<tr><td><b>${m}</b></td>${cols.map(c=>`<td class="num">${counts[m][c]}</td>`).join('')}<td class="num"><b>${sum}</b></td></tr>`;
-  });
-  html += '</tbody></table><div class="hint" style="margin-top:8px;">Enthält alle bisher gespeicherten Monate plus die aktuelle (noch ungespeicherte) Vorschau. Ratten wird nur von Christian und Thorsten übernommen, daher naturgemäß seltener pro Kopf als die anderen drei Aufgaben.</div>';
-  document.getElementById('rotFairnessAll').innerHTML = html;
-}
+  let html = '';
+  for (let kw = 1; kw <= 52; kw++) {
+    const wk = weekKey(year, kw);
+    const rd = rotData[wk] || { employees:{}, note:'' };
+    const isRattenRow = MITARBEITER.some(m => rd.employees?.[m]?.task === 'Ratten');
+    const reinigungCount = MITARBEITER.filter(m => rd.employees?.[m]?.task === 'Reinigung').length;
 
-async function saveRotationPlan() {
-  if (!currentRotPlan) return;
-  const msg = document.getElementById('rotMsg');
-  msg.style.color = 'var(--muted)'; msg.textContent = 'Speichere…';
-  const key = currentRotPlan.year + '-' + String(currentRotPlan.monthIdx + 1).padStart(2,'0');
-  try {
-    await db.collection('rotation_plaene').doc(key).set({
-      year: currentRotPlan.year,
-      monthIdx: currentRotPlan.monthIdx,
-      weeks: currentRotPlan.weeks,
-      savedAt: new Date().toISOString()
-    });
-    await db.collection('rotation_meta').doc('status').set(currentRotPlan.stateAfter);
-  } catch (err) {
-    console.error('Speicherfehler (rotation):', err);
-    msg.style.color = 'var(--red)'; msg.textContent = '✗ Speichern fehlgeschlagen.';
-    return;
+    const rowCls = ['rot-week', isRattenRow ? 'rot-ratten' : ''].filter(Boolean).join(' ');
+
+    html += `<tr class="${rowCls}" data-wkey="${wk}">
+      <td class="kw-cell">KW ${kw}</td>
+      <td class="dates-cell">${fmtWeekRange(year, kw)}</td>
+      ${MITARBEITER.map(ma => {
+        const a = rd.employees?.[ma] || { task:'Frei', note:'' };
+        return `<td class="rot-ma-cell" data-wkey="${wk}" data-ma="${ma}" onclick="cycleStatus('${wk}','${ma}')">${renderBadge(a.task, a.note)}</td>`;
+      }).join('')}
+      <td class="reinigung-hint" data-wkey="${wk}" style="text-align:center;font-size:11px;color:var(--red);font-weight:700;">${reinigungCount < 2 && Object.keys(rd.employees||{}).length ? '⚠ nur ' + reinigungCount : ''}</td>
+      <td><input class="notiz-input" style="font-size:11px;padding:3px 5px;" data-wkey="${wk}"
+        value="${(rd.note||'').replace(/"/g,'&quot;')}" placeholder="Notiz…"
+        oninput="onRotNotiz(this)"></td>
+    </tr>`;
   }
-  msg.style.color = 'var(--green)';
-  msg.textContent = `✓ Rotationsplan ${MONATE_LANG[currentRotPlan.monthIdx]} ${currentRotPlan.year} gespeichert.`;
-  document.getElementById('rotSaveBtn').style.display = 'none';
+
+  document.getElementById('rotBody').innerHTML = html;
+  renderFairness();
+}
+
+function renderFairness() {
+  const year = parseInt(document.getElementById('genYear').value) || 2026;
+  const cols = ['Reinigung','Kontrolle','Regeneinlaeufe','Ratten'];
+
+  // Dieses Jahr
+  const yearCounts = {}; MITARBEITER.forEach(m => yearCounts[m] = { Reinigung:0, Kontrolle:0, Regeneinlaeufe:0, Ratten:0 });
+  Object.entries(rotData).forEach(([wk, rd]) => {
+    if (!wk.startsWith(year + '-W')) return;
+    MITARBEITER.forEach(m => { const t = rd.employees?.[m]?.task; if (t && yearCounts[m][t] !== undefined) yearCounts[m][t]++; });
+  });
+  const elY = document.getElementById('fairnessYear');
+  if (elY) {
+    elY.innerHTML = `<table class="log-table"><thead><tr><th>Mitarbeiter</th>${cols.map(c=>`<th style="text-align:right">${TASK_LABEL[c]}</th>`).join('')}</tr></thead><tbody>
+      ${MITARBEITER.map(m => `<tr><td><b>${m}</b></td>${cols.map(c=>`<td style="text-align:right">${yearCounts[m][c]} Wo.</td>`).join('')}</tr>`).join('')}
+    </tbody></table>`;
+  }
+
+  // Alle Jahre (kumuliert)
+  const allCounts = computeTaskCounts(null);
+  const elA = document.getElementById('fairnessAll');
+  if (elA) {
+    elA.innerHTML = `<table class="log-table"><thead><tr><th>Mitarbeiter</th>${cols.map(c=>`<th style="text-align:right">${TASK_LABEL[c]}</th>`).join('')}<th style="text-align:right">Summe</th></tr></thead><tbody>
+      ${MITARBEITER.map(m => { const sum = cols.reduce((s,c)=>s+allCounts[m][c],0); return `<tr><td><b>${m}</b></td>${cols.map(c=>`<td style="text-align:right">${allCounts[m][c]}</td>`).join('')}<td style="text-align:right"><b>${sum}</b></td></tr>`; }).join('')}
+    </tbody></table>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px;">Ratten ist ausschließlich Christian und Thorsten vorbehalten, daher naturgemäß seltener pro Kopf als die anderen drei Aufgaben.</div>`;
+  }
+}
+
+function onRotNotiz(el) {
+  const wk = el.dataset.wkey;
+  if (!rotData[wk]) rotData[wk] = { employees:{}, note:'' };
+  rotData[wk].note = el.value;
+  scheduleRotSave();
+}
+
+// ─── Init (wird nach erfolgreicher Passworteingabe aufgerufen) ─
+async function startApp() {
+  const now = new Date();
+  currentYear = now.getFullYear();
+  currentMonth = now.getMonth();
+  document.getElementById('genYear').value = now.getFullYear();
+
+  setSyncStatus('Lade Daten…');
+  await Promise.all([loadData(), loadRotData(), loadUrlaub()]);
+  setSyncStatus('✓ Verbunden mit Firestore', true);
+
+  renderGrid();
+  populateOvFilters();
+  buildUrlaubSelect();
+  renderUrlaubListe();
 }
 </script>
 </body>
