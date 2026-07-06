@@ -140,6 +140,7 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
 .st-Regeneinlaeufe { background:#00B0F0; color:#111; }
 .st-Ratten         { background:#FFFF00; color:#111; }
 .st-Urlaub         { background:#1e4a6b; color:#a0ccee; }
+.st-Sonstiges      { background:#e0564a; color:#fff; }
 .st-Frei           { background:#2c3543; color:#8a96a8; }
 .vertretung-flag { display:block; font-size:9px; color:#e07a1c; margin-top:2px; font-weight:600; }
 .uebergabe-flag { display:block; font-size:9px; color:#8a96a8; margin-top:2px; font-weight:600; }
@@ -253,6 +254,26 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
   </div>
 
   <div class="card">
+    <h2>1b. Sonstige Tätigkeiten / Fortbildungen eintragen</h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Vor dem Generieren eintragen — wird automatisch berücksichtigt und wie Urlaub als fest vorgegeben behandelt (Woche gilt als "Sonstiges", wenn mind. 3 von 5 Arbeitstagen betroffen sind).</div>
+    <div class="urlaub-form">
+      <div class="fld"><label>Mitarbeiter</label><select id="sonMA"></select></div>
+      <div class="fld"><label>Von</label><input type="date" id="sonVon"></div>
+      <div class="fld"><label>Bis</label><input type="date" id="sonBis"></div>
+      <div class="fld"><label>Bezeichnung</label><input type="text" id="sonBez" placeholder="z. B. Fortbildung Brandschutz" style="min-width:220px;"></div>
+      <button class="btn btn-green" onclick="addSonstiges()">+ Eintragen</button>
+    </div>
+    <span id="sonMsg" style="font-size:12px;display:block;margin-top:8px;"></span>
+    <div class="tbl-scroll" style="margin-top:12px;">
+      <table class="log-table">
+        <thead><tr><th>Mitarbeiter</th><th>Bezeichnung</th><th>Von</th><th>Bis</th><th style="width:50px">Aktion</th></tr></thead>
+        <tbody id="sonBody"></tbody>
+      </table>
+    </div>
+    <div id="sonEmpty" class="empty-state" style="display:none">Keine Einträge.</div>
+  </div>
+
+  <div class="card">
     <h2>2. Rotationsplan generieren</h2>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">
       Reinigung, Kontrolle und Regeneinläufe rotieren im ca. 4-Wochen-Rhythmus mit ca. 1 Woche Übergabe/Einarbeitung.
@@ -287,6 +308,7 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
       <div class="leg-item"><span class="st-badge st-Regeneinlaeufe">Regeneinläufe</span></div>
       <div class="leg-item"><span class="st-badge st-Ratten">Ratten</span></div>
       <div class="leg-item"><span class="st-badge st-Urlaub">Urlaub</span></div>
+      <div class="leg-item"><span class="st-badge st-Sonstiges">Sonstiges</span></div>
       <div class="leg-item"><span class="st-badge st-Frei">Frei</span></div>
       <div style="width:1px;background:var(--border);height:20px;margin:0 6px;"></div>
       <div class="leg-item"><span style="font-size:9px;color:#e07a1c;font-weight:700;">Vertretung</span> = Reinigung-Notbesetzung</div>
@@ -485,9 +507,12 @@ async function showSection(s, btn) {
   btn.classList.add('active');
   if (s === 'uebersicht') { populateOvFilters(); renderOverview(); }
   if (s === 'rotation') {
-    await Promise.all([loadRotData(), loadUrlaub()]);
+    await Promise.all([loadRotData(), loadUrlaub(), loadSonstiges()]);
+    buildUrlaubSelect();
+    buildSonstigesSelect();
     renderRotation();
     renderUrlaubListe();
+    renderSonstigesListe();
   }
 }
 
@@ -710,7 +735,7 @@ const ROT_TASKS = ['Reinigung','Kontrolle','Regeneinlaeufe']; // rotieren im 4-W
 const RATTEN_LEUTE = ['Christian Leyener','Thorsten Nitschke']; // exklusiv für Ratten
 const ROT_BLOCK_WOCHEN = 4;  // Länge einer regulären Zuweisung je Aufgabe
 const RATTEN_ZYKLUS = 3;     // alle X Wochen ist 1 Woche Ratten fällig
-const TASK_LABEL = { Reinigung:'Reinigung', Kontrolle:'Kontrolle', Regeneinlaeufe:'Regeneinläufe', Ratten:'Ratten', Urlaub:'Urlaub', Frei:'Frei' };
+const TASK_LABEL = { Reinigung:'Reinigung', Kontrolle:'Kontrolle', Regeneinlaeufe:'Regeneinläufe', Ratten:'Ratten', Urlaub:'Urlaub', Sonstiges:'Sonstiges', Frei:'Frei' };
 
 async function loadRotData() {
   try {
@@ -770,7 +795,84 @@ async function saveUrlaub() {
 
 function buildUrlaubSelect() {
   const sel = document.getElementById('urlMA');
-  if (sel) sel.innerHTML = MITARBEITER.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (!sel) return;
+  // Immer neu befüllen (idempotent) und aktuelle Auswahl möglichst erhalten,
+  // damit ein leeres/nicht-auswählbares Dropdown (z. B. nach erneutem Anzeigen
+  // des Reiters) zuverlässig behoben wird.
+  const prev = sel.value;
+  sel.innerHTML = MITARBEITER.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (prev && MITARBEITER.includes(prev)) sel.value = prev;
+}
+
+// ─── Sonstige Tätigkeiten / Fortbildungen (vor der Generierung einzutragen) ──
+let sonstigesData = [];
+
+async function loadSonstiges() {
+  try {
+    const snap = await db.collection('dienstplan_app').doc('sonstiges').get();
+    sonstigesData = snap.exists ? (snap.data().eintraege || []) : [];
+  } catch (err) { console.error('Ladefehler (sonstiges):', err); sonstigesData = []; }
+}
+
+async function saveSonstiges() {
+  try { await db.collection('dienstplan_app').doc('sonstiges').set({ eintraege: sonstigesData }); return true; }
+  catch (err) { console.error('Speicherfehler (sonstiges):', err); return false; }
+}
+
+function buildSonstigesSelect() {
+  const sel = document.getElementById('sonMA');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = MITARBEITER.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (prev && MITARBEITER.includes(prev)) sel.value = prev;
+}
+
+async function addSonstiges() {
+  const ma = document.getElementById('sonMA').value;
+  const von = document.getElementById('sonVon').value;
+  const bis = document.getElementById('sonBis').value || von;
+  const bez = document.getElementById('sonBez').value.trim();
+  const msg = document.getElementById('sonMsg');
+  if (!von) { msg.style.color = 'var(--red)'; msg.textContent = 'Bitte mindestens ein "Von"-Datum wählen.'; return; }
+  if (bis < von) { msg.style.color = 'var(--red)'; msg.textContent = '"Bis" darf nicht vor "Von" liegen.'; return; }
+  sonstigesData.push({ ma, von, bis, bez });
+  msg.style.color = 'var(--muted)'; msg.textContent = 'Speichere…';
+  const ok = await saveSonstiges();
+  msg.style.color = ok ? 'var(--green)' : 'var(--red)';
+  msg.textContent = ok ? '✓ Eingetragen.' : '✗ Speichern fehlgeschlagen.';
+  if (ok) setTimeout(() => { msg.textContent = ''; }, 3000);
+  document.getElementById('sonBez').value = '';
+  renderSonstigesListe();
+}
+
+async function deleteSonstiges(idx) {
+  if (!confirm('Eintrag löschen?')) return;
+  sonstigesData.splice(idx, 1);
+  await saveSonstiges();
+  renderSonstigesListe();
+}
+
+function renderSonstigesListe() {
+  const tbody = document.getElementById('sonBody'); const empty = document.getElementById('sonEmpty');
+  if (!tbody) return;
+  const sorted = sonstigesData.map((e,i) => ({...e, i})).sort((a,b) => (a.von||'').localeCompare(b.von||''));
+  if (sorted.length === 0) { tbody.innerHTML = ''; if (empty) empty.style.display = 'block'; return; }
+  if (empty) empty.style.display = 'none';
+  tbody.innerHTML = sorted.map(e => `<tr><td><b>${e.ma}</b></td><td>${e.bez||'Sonstiges'}</td><td>${e.von}</td><td>${e.bis}</td>
+    <td><button class="btn btn-sm" style="background:var(--red);color:white;" onclick="deleteSonstiges(${e.i})">✕</button></td></tr>`).join('');
+}
+
+/* Woche gilt als "Sonstiges"-Woche für ma, wenn an mind. 3 der 5 Arbeitstage (Mo–Fr) ein Eintrag vorliegt */
+function isSonstigesForWeek(ma, year, kw) {
+  const start = getWeekStart(year, kw);
+  let count = 0; let bez = '';
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    const ds = dateStr(d.getFullYear(), d.getMonth(), d.getDate());
+    const hit = sonstigesData.find(u => u.ma === ma && ds >= u.von && ds <= u.bis);
+    if (hit) { count++; bez = hit.bez || bez; }
+  }
+  return count >= 3 ? (bez || 'Sonstiges') : null;
 }
 
 async function addUrlaub() {
@@ -829,8 +931,8 @@ function cycleStatus(wk, ma) {
   if (!rotData[wk]) rotData[wk] = { employees:{}, note:'' };
   if (!rotData[wk].employees) rotData[wk].employees = {};
   const isRT = RATTEN_LEUTE.includes(ma);
-  const cycle = isRT ? ['Reinigung','Kontrolle','Regeneinlaeufe','Ratten','Urlaub','Frei']
-                      : ['Reinigung','Kontrolle','Regeneinlaeufe','Urlaub','Frei'];
+  const cycle = isRT ? ['Reinigung','Kontrolle','Regeneinlaeufe','Ratten','Urlaub','Sonstiges','Frei']
+                      : ['Reinigung','Kontrolle','Regeneinlaeufe','Urlaub','Sonstiges','Frei'];
   const cur = rotData[wk].employees[ma]?.task || 'Frei';
   const nxt = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
   rotData[wk].employees[ma] = { task: nxt, note: '' };
@@ -915,6 +1017,9 @@ function autoGenRotation() {
 
     // Urlaub/Frei aus Vorab-Eintragung überschreibt die Aufgabe
     MITARBEITER.forEach(m => { if (isUrlaubForWeek(m, year, kw)) assign[m] = { task: 'Urlaub', note: '' }; });
+
+    // Sonstige Tätigkeiten/Fortbildungen aus Vorab-Eintragung überschreiben die Aufgabe (fix, hat Vorrang)
+    MITARBEITER.forEach(m => { const bez = isSonstigesForWeek(m, year, kw); if (bez) assign[m] = { task: 'Sonstiges', note: bez }; });
 
     // Mindestbesetzung Reinigung = 2
     let cnt = MITARBEITER.filter(m => assign[m].task === 'Reinigung').length;
@@ -1028,13 +1133,15 @@ async function startApp() {
   document.getElementById('genYear').value = now.getFullYear();
 
   setSyncStatus('Lade Daten…');
-  await Promise.all([loadData(), loadRotData(), loadUrlaub()]);
+  await Promise.all([loadData(), loadRotData(), loadUrlaub(), loadSonstiges()]);
   setSyncStatus('✓ Verbunden mit Firestore', true);
 
   renderGrid();
   populateOvFilters();
   buildUrlaubSelect();
+  buildSonstigesSelect();
   renderUrlaubListe();
+  renderSonstigesListe();
 }
 </script>
 </body>
