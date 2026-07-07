@@ -142,6 +142,8 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
 .st-Urlaub         { background:#1e4a6b; color:#a0ccee; }
 .st-Sonstiges      { background:#e0564a; color:#fff; }
 .st-Frei           { background:#2c3543; color:#8a96a8; }
+.st-Ruf            { background:#9b59b6; color:#fff; }
+.st-Winter         { background:#5dade2; color:#0a1e2b; }
 .vertretung-flag { display:block; font-size:9px; color:#e07a1c; margin-top:2px; font-weight:600; }
 .uebergabe-flag { display:block; font-size:9px; color:#8a96a8; margin-top:2px; font-weight:600; }
 
@@ -274,11 +276,38 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
   </div>
 
   <div class="card">
+    <h2>1c. Bereitschaft eintragen</h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Rufbereitschaft und Winterdienst getrennt erfassen. Dient nur der Übersicht/Dokumentation und fließt nicht in die Rotations-Automatik ein.</div>
+    <div class="urlaub-form">
+      <div class="fld"><label>Mitarbeiter</label><select id="berMA"></select></div>
+      <div class="fld"><label>Art</label><select id="berArt"><option value="Ruf">Rufbereitschaft</option><option value="Winter">Winterdienst</option></select></div>
+      <div class="fld"><label>Von</label><input type="date" id="berVon"></div>
+      <div class="fld"><label>Bis</label><input type="date" id="berBis"></div>
+      <button class="btn btn-green" onclick="addBereitschaft()">+ Eintragen</button>
+    </div>
+    <span id="berMsg" style="font-size:12px;display:block;margin-top:8px;"></span>
+    <div class="legend-bar" style="margin-top:12px;">
+      <span>Legende:</span>
+      <div class="leg-item"><span class="st-badge st-Ruf">Rufbereitschaft</span></div>
+      <div class="leg-item"><span class="st-badge st-Winter">Winterdienst</span></div>
+    </div>
+    <div class="tbl-scroll" style="margin-top:12px;">
+      <table class="log-table">
+        <thead><tr><th>Mitarbeiter</th><th>Art</th><th>Von</th><th>Bis</th><th style="width:50px">Aktion</th></tr></thead>
+        <tbody id="berBody"></tbody>
+      </table>
+    </div>
+    <div id="berEmpty" class="empty-state" style="display:none">Keine Einträge.</div>
+  </div>
+
+  <div class="card">
     <h2>2. Rotationsplan generieren</h2>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">
-      Reinigung, Kontrolle und Regeneinläufe rotieren im ca. 4-Wochen-Rhythmus mit ca. 1 Woche Übergabe/Einarbeitung.
+      Reinigung, Kontrolle und Regeneinläufe rotieren im ca. 4-Wochen-Rhythmus mit ca. 1 Woche Übergabe/Einarbeitung
+      (eine Woche Überschneidung: der bisherige und der neue Kollege tragen die Aufgabe gemeinsam, "Übergabe von …").
       Ratten übernehmen ausschließlich Christian und Thorsten (abwechselnd, 1 Woche Aufwand, jede 3. Woche fällig) und rotieren ansonsten normal mit.
       Bei der Reinigung sind immer mindestens 2 Personen eingeplant — fehlt jemand, wird automatisch jemand aus Kontrolle/Regeneinläufe als Vertretung nachgezogen (gelb markiert).
+      Es reicht, jeweils einen Monat (ca. 4–5 Wochen) auf einmal zu generieren — dazu einfach die Start-KW und Anzahl Wochen entsprechend wählen.
       Alle Zellen bleiben danach per Klick manuell änderbar.
     </div>
     <div class="gen-bar">
@@ -290,6 +319,8 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
       </select>
       <label>Start-KW:</label>
       <input type="number" id="genStartKW" min="1" max="52" value="1">
+      <label>Anzahl Wochen:</label>
+      <input type="number" id="genWeeks" min="1" max="52" value="5" title="z. B. 5 Wochen ≈ 1 Monat">
       <label>Erster Ratten-Dienst:</label>
       <select id="genRattenStart">
         <option value="C">Christian Leyener</option>
@@ -507,12 +538,14 @@ async function showSection(s, btn) {
   btn.classList.add('active');
   if (s === 'uebersicht') { populateOvFilters(); renderOverview(); }
   if (s === 'rotation') {
-    await Promise.all([loadRotData(), loadUrlaub(), loadSonstiges()]);
+    await Promise.all([loadRotData(), loadUrlaub(), loadSonstiges(), loadBereitschaft()]);
     buildUrlaubSelect();
     buildSonstigesSelect();
+    buildBereitschaftSelect();
     renderRotation();
     renderUrlaubListe();
     renderSonstigesListe();
+    renderBereitschaftListe();
   }
 }
 
@@ -921,6 +954,65 @@ function isUrlaubForWeek(ma, year, kw) {
   return count >= 3;
 }
 
+// ─── Bereitschaft (Rufbereitschaft / Winterdienst) — nur Dokumentation ──
+let bereitschaftData = [];
+
+async function loadBereitschaft() {
+  try {
+    const snap = await db.collection('dienstplan_app').doc('bereitschaft').get();
+    bereitschaftData = snap.exists ? (snap.data().eintraege || []) : [];
+  } catch (err) { console.error('Ladefehler (bereitschaft):', err); bereitschaftData = []; }
+}
+
+async function saveBereitschaft() {
+  try { await db.collection('dienstplan_app').doc('bereitschaft').set({ eintraege: bereitschaftData }); return true; }
+  catch (err) { console.error('Speicherfehler (bereitschaft):', err); return false; }
+}
+
+function buildBereitschaftSelect() {
+  const sel = document.getElementById('berMA');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = MITARBEITER.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (prev && MITARBEITER.includes(prev)) sel.value = prev;
+}
+
+async function addBereitschaft() {
+  const ma = document.getElementById('berMA').value;
+  const art = document.getElementById('berArt').value;
+  const von = document.getElementById('berVon').value;
+  const bis = document.getElementById('berBis').value || von;
+  const msg = document.getElementById('berMsg');
+  if (!von) { msg.style.color = 'var(--red)'; msg.textContent = 'Bitte mindestens ein "Von"-Datum wählen.'; return; }
+  if (bis < von) { msg.style.color = 'var(--red)'; msg.textContent = '"Bis" darf nicht vor "Von" liegen.'; return; }
+  bereitschaftData.push({ ma, art, von, bis });
+  msg.style.color = 'var(--muted)'; msg.textContent = 'Speichere…';
+  const ok = await saveBereitschaft();
+  msg.style.color = ok ? 'var(--green)' : 'var(--red)';
+  msg.textContent = ok ? '✓ Eingetragen.' : '✗ Speichern fehlgeschlagen.';
+  if (ok) setTimeout(() => { msg.textContent = ''; }, 3000);
+  renderBereitschaftListe();
+}
+
+async function deleteBereitschaft(idx) {
+  if (!confirm('Eintrag löschen?')) return;
+  bereitschaftData.splice(idx, 1);
+  await saveBereitschaft();
+  renderBereitschaftListe();
+}
+
+function renderBereitschaftListe() {
+  const tbody = document.getElementById('berBody'); const empty = document.getElementById('berEmpty');
+  if (!tbody) return;
+  const label = { Ruf: 'Rufbereitschaft', Winter: 'Winterdienst' };
+  const cls = { Ruf: 'st-Ruf', Winter: 'st-Winter' };
+  const sorted = bereitschaftData.map((e,i) => ({...e, i})).sort((a,b) => (a.von||'').localeCompare(b.von||''));
+  if (sorted.length === 0) { tbody.innerHTML = ''; if (empty) empty.style.display = 'block'; return; }
+  if (empty) empty.style.display = 'none';
+  tbody.innerHTML = sorted.map(e => `<tr><td><b>${e.ma}</b></td><td><span class="st-badge ${cls[e.art]||''}">${label[e.art]||e.art}</span></td><td>${e.von}</td><td>${e.bis}</td>
+    <td><button class="btn btn-sm" style="background:var(--red);color:white;" onclick="deleteBereitschaft(${e.i})">✕</button></td></tr>`).join('');
+}
+
 // ─── Badges / manuelles Umschalten ────────────────────────────
 function renderBadge(task, note) {
   const t = task || 'Frei';
@@ -968,6 +1060,8 @@ function computeTaskCounts(excludeYear) {
 function autoGenRotation() {
   const year  = parseInt(document.getElementById('genYear').value);
   const start = parseInt(document.getElementById('genStartKW').value) || 1;
+  const weeksCount = Math.max(1, Math.min(52, parseInt(document.getElementById('genWeeks').value) || 5));
+  const end = Math.min(52, start + weeksCount - 1);
   const firstC = document.getElementById('genRattenStart').value === 'C';
 
   const taskCounts = computeTaskCounts(String(year));
@@ -981,7 +1075,7 @@ function autoGenRotation() {
 
   let rattenIdx = firstC ? 0 : 1;
 
-  for (let kw = start; kw <= 52; kw++) {
+  for (let kw = start; kw <= end; kw++) {
     const wIdx = kw - start;
     const isRattenWeek = wIdx % RATTEN_ZYKLUS === (RATTEN_ZYKLUS - 1); // jede 3. Woche
     let rattenPerson = null;
@@ -1133,15 +1227,17 @@ async function startApp() {
   document.getElementById('genYear').value = now.getFullYear();
 
   setSyncStatus('Lade Daten…');
-  await Promise.all([loadData(), loadRotData(), loadUrlaub(), loadSonstiges()]);
+  await Promise.all([loadData(), loadRotData(), loadUrlaub(), loadSonstiges(), loadBereitschaft()]);
   setSyncStatus('✓ Verbunden mit Firestore', true);
 
   renderGrid();
   populateOvFilters();
   buildUrlaubSelect();
   buildSonstigesSelect();
+  buildBereitschaftSelect();
   renderUrlaubListe();
   renderSonstigesListe();
+  renderBereitschaftListe();
 }
 </script>
 </body>
