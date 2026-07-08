@@ -108,6 +108,26 @@ tr.is-weekend .cell-input, tr.is-weekend .kat-sel { opacity: 0.35; }
   .grid-table th.th-ma { min-width: 130px; }
 }
 
+/* ─── Drucken (Monatsplan auf einer Seite) ─────────────────── */
+@media print {
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .no-print, header, nav, .legend-bar, #authOverlay { display: none !important; }
+  body { background: white; color: #000; }
+  main { padding: 0; max-width: none; margin: 0; }
+  .card { border: none; padding: 0; margin: 0; background: white; }
+  .month-nav { background: none; border: none; padding: 0 0 6px 0; justify-content: flex-start; }
+  .month-nav h2 { text-align: left; min-width: 0; color: #000; }
+  .grid-wrap { overflow: visible; }
+  .grid-table { width: 100%; min-width: 0; font-size: 7.5px; table-layout: fixed; }
+  .grid-table th { background: #444 !important; color: #fff !important; padding: 2px 3px; }
+  .grid-table td { padding: 1px 2px; border: 1px solid #ccc; }
+  .td-date, .td-day, .td-kw { color: #000 !important; }
+  .td-kw-label { color: #000 !important; background: #eee !important; }
+  .cell-input, .notiz-input { background: transparent !important; color: #000 !important; border: none !important; font-size: 7.5px; padding: 0; }
+  .kat-sel { border: none !important; font-size: 7px; padding: 0; }
+  @page { size: A4 landscape; margin: 6mm; }
+}
+
 /* ─── Rotationsplan ──────────────────────────────────────── */
 .gen-bar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--white); padding:12px 18px; border-radius:8px; border:1px solid var(--border); margin-bottom:14px; }
 .gen-bar label { font-size:12px; font-weight:700; color:var(--blue); }
@@ -203,11 +223,12 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
 <div id="sec-plan" class="section active">
 
   <div class="month-nav">
-    <button class="btn btn-ghost" onclick="changeMonth(-1)">◀ Vormonat</button>
+    <button class="btn btn-ghost no-print" onclick="changeMonth(-1)">◀ Vormonat</button>
     <h2 id="monthTitle">—</h2>
-    <button class="btn btn-ghost" onclick="changeMonth(+1)">Nächster ▶</button>
-    <div style="font-size:12px;color:var(--muted);margin-left:8px;">Änderungen werden automatisch gespeichert.</div>
-    <span id="syncStatus2" style="margin-left:auto;font-size:11px;color:var(--muted);"></span>
+    <button class="btn btn-ghost no-print" onclick="changeMonth(+1)">Nächster ▶</button>
+    <button class="btn btn-primary no-print" onclick="window.print()">🖨 Drucken</button>
+    <div class="no-print" style="font-size:12px;color:var(--muted);margin-left:8px;">Änderungen werden automatisch gespeichert.</div>
+    <span id="syncStatus2" class="no-print" style="margin-left:auto;font-size:11px;color:var(--muted);"></span>
   </div>
 
   <div class="legend-bar">
@@ -303,12 +324,12 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
   <div class="card">
     <h2>2. Rotationsplan generieren</h2>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">
-      Reinigung, Kontrolle und Regeneinläufe rotieren im ca. 4-Wochen-Rhythmus mit ca. 1 Woche Übergabe/Einarbeitung
-      (eine Woche Überschneidung: der bisherige und der neue Kollege tragen die Aufgabe gemeinsam, "Übergabe von …").
+      Reinigung, Kontrolle und Regeneinläufe rotieren im ca. 4-Wochen-Rhythmus mit 1 Woche Übergabe/Einarbeitung:
+      in dieser Woche machen der bisherige und der neue Kollege die Aufgabe gemeinsam ("Übergabe von …" / "Übergabe an …").
       Ratten übernehmen ausschließlich Christian und Thorsten (abwechselnd, 1 Woche Aufwand, jede 3. Woche fällig) und rotieren ansonsten normal mit.
       Bei der Reinigung sind immer mindestens 2 Personen eingeplant — fehlt jemand, wird automatisch jemand aus Kontrolle/Regeneinläufe als Vertretung nachgezogen (gelb markiert).
-      Es reicht, jeweils einen Monat (ca. 4–5 Wochen) auf einmal zu generieren — dazu einfach die Start-KW und Anzahl Wochen entsprechend wählen.
-      Alle Zellen bleiben danach per Klick manuell änderbar.
+      Einfach Jahr und Monat wählen und generieren — die App ermittelt selbst, welche Kalenderwochen zu diesem Monat gehören.
+      Alle Zellen bleiben danach per Klick manuell änderbar. Mit "In Monatsplan übertragen" wird der generierte Monat 1:1 in die Monatsplan-Seite (Reiter "📅 Monatsplan") eingetragen.
     </div>
     <div class="gen-bar">
       <label>Jahr:</label>
@@ -317,16 +338,28 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
         <option value="2025">2025</option>
         <option value="2027">2027</option>
       </select>
-      <label>Start-KW:</label>
-      <input type="number" id="genStartKW" min="1" max="52" value="1">
-      <label>Anzahl Wochen:</label>
-      <input type="number" id="genWeeks" min="1" max="52" value="5" title="z. B. 5 Wochen ≈ 1 Monat">
+      <label>Monat:</label>
+      <select id="genMonth">
+        <option value="0">Januar</option>
+        <option value="1">Februar</option>
+        <option value="2">März</option>
+        <option value="3">April</option>
+        <option value="4">Mai</option>
+        <option value="5">Juni</option>
+        <option value="6" selected>Juli</option>
+        <option value="7">August</option>
+        <option value="8">September</option>
+        <option value="9">Oktober</option>
+        <option value="10">November</option>
+        <option value="11">Dezember</option>
+      </select>
       <label>Erster Ratten-Dienst:</label>
       <select id="genRattenStart">
         <option value="C">Christian Leyener</option>
         <option value="T">Thorsten Nitschke</option>
       </select>
       <button class="btn btn-green" onclick="autoGenRotation()">⚡ Auto-Generieren</button>
+      <button class="btn btn-primary" onclick="transferMonthToPlan()">📤 In Monatsplan übertragen</button>
       <button class="btn btn-ghost btn-sm" onclick="clearRotation()">🗑 Zurücksetzen</button>
       <span style="font-size:11px;color:var(--muted);">→ Auf Zelle klicken = Aufgabe wechseln</span>
       <span id="rotSyncStatus" style="margin-left:auto;font-size:11px;color:var(--muted);"></span>
@@ -794,6 +827,19 @@ function scheduleRotSave() {
 
 function weekKey(year, kw) { return `${year}-W${String(kw).padStart(2,'0')}`; }
 
+/* Ermittelt, welche Kalenderwochen zu einem Monat gehören (für die Monats-Auswahl
+   bei der Generierung). Näherung: erste KW = KW des 1. Tages, letzte KW = KW des
+   letzten Tages des Monats. Für den Jahreswechsel-Randfall (z. B. Dezember) wird
+   defensiv abgefangen, damit die Spanne innerhalb 1–52 bleibt. */
+function monthWeekRange(year, month) {
+  const first = new Date(year, month, 1, 12);
+  const last = new Date(year, month + 1, 0, 12);
+  const start = getISOWeek(first);
+  let end = getISOWeek(last);
+  if (end < start) end = Math.min(52, start + 5);
+  return { start: Math.max(1, start), end: Math.min(52, end) };
+}
+
 function getWeekStart(year, kw) {
   // Monday of ISO week
   const jan4 = new Date(year, 0, 4, 12);
@@ -1059,9 +1105,8 @@ function computeTaskCounts(excludeYear) {
 
 function autoGenRotation() {
   const year  = parseInt(document.getElementById('genYear').value);
-  const start = parseInt(document.getElementById('genStartKW').value) || 1;
-  const weeksCount = Math.max(1, Math.min(52, parseInt(document.getElementById('genWeeks').value) || 5));
-  const end = Math.min(52, start + weeksCount - 1);
+  const month = parseInt(document.getElementById('genMonth').value);
+  const { start, end } = monthWeekRange(year, month);
   const firstC = document.getElementById('genRattenStart').value === 'C';
 
   const taskCounts = computeTaskCounts(String(year));
@@ -1102,11 +1147,29 @@ function autoGenRotation() {
     // Wochenzuweisung ableiten
     const assign = {};
     MITARBEITER.forEach(m => assign[m] = { task: 'Frei', note: '' });
+
+    // 1) Neue Slot-Inhaber zuweisen
     slotNames.forEach(sn => {
       const slot = slots[sn];
       const taskKey = sn.split('-')[0];
-      assign[slot.employee] = { task: taskKey, note: (slot.handoverFrom && slot.sinceKW === kw) ? ('Übergabe von ' + slot.handoverFrom.split(' ')[0]) : '' };
+      const isHandoverWeek = slot.handoverFrom && slot.sinceKW === kw;
+      assign[slot.employee] = { task: taskKey, note: isHandoverWeek ? ('Übergabe von ' + slot.handoverFrom.split(' ')[0]) : '' };
     });
+
+    // 2) Überschneidung: der bisherige Kollege macht die Aufgabe in der Übergabewoche
+    //    noch eine Woche mit (Einarbeitung), sofern er nicht bereits selbst woanders
+    //    neu eingeteilt wurde (z. B. weil sein eigener Slot zeitgleich wechselt).
+    slotNames.forEach(sn => {
+      const slot = slots[sn];
+      const taskKey = sn.split('-')[0];
+      if (slot.handoverFrom && slot.sinceKW === kw) {
+        const prev = slot.handoverFrom;
+        if (assign[prev].task === 'Frei') {
+          assign[prev] = { task: taskKey, note: 'Übergabe an ' + slot.employee.split(' ')[0] };
+        }
+      }
+    });
+
     if (rattenPerson) assign[rattenPerson] = { task: 'Ratten', note: '' };
 
     // Urlaub/Frei aus Vorab-Eintragung überschreibt die Aufgabe
@@ -1137,6 +1200,58 @@ function autoGenRotation() {
   scheduleRotSave();
 }
 
+/* Überträgt den im Rotationsplan generierten Monat (Jahr/Monat aus den Auswahlfeldern)
+   1:1 in die Monatsplan-Seite: für jeden Werktag wird Kategorie + Eintragstext je
+   Mitarbeiter aus der zugehörigen Kalenderwoche übernommen. Wochenenden werden
+   übersprungen (dort gibt es im Monatsplan ohnehin keine Aufgaben). */
+const TASK_TO_KAT = { Reinigung:'R', Kontrolle:'K', Regeneinlaeufe:'RE', Ratten:'Ra', Sonstiges:'S', Urlaub:'Fr', Frei:'Fr' };
+
+function transferMonthToPlan() {
+  const year  = parseInt(document.getElementById('genYear').value);
+  const month = parseInt(document.getElementById('genMonth').value);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  let transferred = 0;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateObj = new Date(year, month, day, 12);
+    const dow = dateObj.getDay();
+    if (dow === 0 || dow === 6) continue; // Wochenende: im Monatsplan ohne Aufgabe
+
+    const ds = dateStr(year, month, day);
+    const kw = getISOWeek(dateObj);
+    const wk = weekKey(year, kw);
+    const rd = rotData[wk];
+    if (!rd || !rd.employees) continue;
+
+    const dayEntry = entryData(ds);
+    MITARBEITER.forEach(ma => {
+      const a = rd.employees[ma];
+      if (!a) return;
+      const kat = TASK_TO_KAT[a.task] || '';
+      let text = TASK_LABEL[a.task] || a.task;
+      if (a.task === 'Sonstiges' && a.note) text = a.note;
+      else if (a.note) text += ` (${a.note})`;
+      dayEntry.entries[ma] = { text, kat };
+    });
+    if (rd.note && !dayEntry.notiz) dayEntry.notiz = rd.note;
+    transferred++;
+  }
+
+  if (transferred === 0) {
+    alert(`Für ${MONATE_LANG[month]} ${year} liegt noch kein generierter Rotationsplan vor. Bitte zuerst "⚡ Auto-Generieren" ausführen.`);
+    return;
+  }
+
+  currentYear = year;
+  currentMonth = month;
+  document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+  document.getElementById('sec-plan').classList.add('active');
+  document.querySelector('nav button').classList.add('active');
+  renderGrid();
+  scheduleSave();
+}
+
 function clearRotation() {
   if (!confirm('Rotationsplan für dieses Jahr zurücksetzen? Alle manuellen Änderungen gehen verloren.')) return;
   const year = parseInt(document.getElementById('genYear').value);
@@ -1158,11 +1273,21 @@ function renderRotation() {
   </tr>`;
 
   let html = '';
+  let lastMonthLabel = null;
+  const totalCols = 2 + MITARBEITER.length + 2; // KW, Mo-Fr, MA..., Reinigung, Notiz
   for (let kw = 1; kw <= 52; kw++) {
     const wk = weekKey(year, kw);
     const rd = rotData[wk] || { employees:{}, note:'' };
     const isRattenRow = MITARBEITER.some(m => rd.employees?.[m]?.task === 'Ratten');
     const reinigungCount = MITARBEITER.filter(m => rd.employees?.[m]?.task === 'Reinigung').length;
+
+    // Monats-Trennzeile: zeigt zusätzlich zur KW an, in welchen Monat die Woche fällt
+    const weekMon = getWeekStart(year, kw);
+    const monthLabel = `${MONATE_LANG[weekMon.getMonth()]} ${weekMon.getFullYear()}`;
+    if (monthLabel !== lastMonthLabel) {
+      html += `<tr class="block-sep"><td colspan="${totalCols}">📅 ${monthLabel}</td></tr>`;
+      lastMonthLabel = monthLabel;
+    }
 
     const rowCls = ['rot-week', isRattenRow ? 'rot-ratten' : ''].filter(Boolean).join(' ');
 
@@ -1225,6 +1350,7 @@ async function startApp() {
   currentYear = now.getFullYear();
   currentMonth = now.getMonth();
   document.getElementById('genYear').value = now.getFullYear();
+  document.getElementById('genMonth').value = now.getMonth();
 
   setSyncStatus('Lade Daten…');
   await Promise.all([loadData(), loadRotData(), loadUrlaub(), loadSonstiges(), loadBereitschaft()]);
