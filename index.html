@@ -166,6 +166,9 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
 .st-Winter         { background:#5dade2; color:#0a1e2b; }
 .vertretung-flag { display:block; font-size:9px; color:#e07a1c; margin-top:2px; font-weight:600; }
 .uebergabe-flag { display:block; font-size:9px; color:#8a96a8; margin-top:2px; font-weight:600; }
+.ber-flag { display:inline-block; font-size:9px; font-weight:700; border-radius:3px; padding:1px 5px; margin-top:3px; margin-right:3px; }
+.ber-Ruf    { background:#9b59b6; color:#fff; }
+.ber-Winter { background:#5dade2; color:#0a1e2b; }
 
 /* Urlaub-Verwaltung */
 .urlaub-form { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
@@ -241,6 +244,8 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
     <div class="leg-item"><div class="leg-dot" style="background:#888"></div>Frei</div>
     <div class="leg-item"><div class="leg-dot" style="background:#2a1f00;border:1px solid var(--blue-light)"></div>Feiertag (NRW)</div>
     <div class="leg-item"><div class="leg-dot" style="background:#181c24;border:1px solid #3a4455"></div>Wochenende</div>
+    <div class="leg-item"><span class="ber-flag ber-Ruf">📞 Ruf</span>Rufbereitschaft</div>
+    <div class="leg-item"><span class="ber-flag ber-Winter">❄ Winter</span>Winterdienst</div>
   </div>
 
   <div class="card" style="padding: 12px;">
@@ -377,6 +382,9 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
       <div style="width:1px;background:var(--border);height:20px;margin:0 6px;"></div>
       <div class="leg-item"><span style="font-size:9px;color:#e07a1c;font-weight:700;">Vertretung</span> = Reinigung-Notbesetzung</div>
       <div class="leg-item"><span style="font-size:9px;color:#8a96a8;font-weight:700;">Übergabe von …</span> = Einarbeitungswoche</div>
+      <div style="width:1px;background:var(--border);height:20px;margin:0 6px;"></div>
+      <div class="leg-item"><span class="ber-flag ber-Ruf">📞 Ruf</span>Rufbereitschaft (zusätzlich zur Aufgabe)</div>
+      <div class="leg-item"><span class="ber-flag ber-Winter">❄ Winter</span>Winterdienst (zusätzlich zur Aufgabe)</div>
     </div>
 
     <div class="card" style="padding:10px;">
@@ -683,6 +691,7 @@ function renderGrid() {
       ).join('');
       const k = katInfo(entry.kat);
       const katBg = k.color ? `background:${k.color};color:${k.textColor};border-color:${k.color};` : '';
+      const berDay = getBereitschaftForDay(ma, ds);
       html += `<td class="td-ma">
         <div class="cell-inner">
           <select class="kat-sel" style="${katBg}" data-date="${ds}" data-ma="${ma}" onchange="onKatChange(this)">${katOpts}</select>
@@ -690,6 +699,7 @@ function renderGrid() {
             value="${(entry.text||'').replace(/"/g,'&quot;')}"
             placeholder="${isWeekend && !feiertag ? '' : 'Eintrag…'}"
             oninput="onTextChange(this)">
+          ${renderBerBadges(berDay)}
         </div>
       </td>`;
     });
@@ -1047,6 +1057,35 @@ async function deleteBereitschaft(idx) {
   renderBereitschaftListe();
 }
 
+const BER_LABEL_SHORT = { Ruf: '📞 Ruf', Winter: '❄ Winter' };
+
+/* Alle Bereitschafts-Arten (Ruf/Winter), die für ma an genau diesem Tag aktiv sind. */
+function getBereitschaftForDay(ma, ds) {
+  return bereitschaftData.filter(b => b.ma === ma && ds >= b.von && ds <= b.bis).map(b => b.art);
+}
+
+/* Alle Bereitschafts-Arten, die für ma irgendwann innerhalb der Kalenderwoche (Mo–So) aktiv sind. */
+function getBereitschaftForWeek(ma, year, kw) {
+  const start = getWeekStart(year, kw);
+  const arts = new Set();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    const ds = dateStr(d.getFullYear(), d.getMonth(), d.getDate());
+    getBereitschaftForDay(ma, ds).forEach(a => arts.add(a));
+  }
+  return [...arts];
+}
+
+function renderBerBadges(arts) {
+  if (!arts || !arts.length) return '';
+  return arts.map(a => `<span class="ber-flag ber-${a}">${BER_LABEL_SHORT[a] || a}</span>`).join('');
+}
+
+function parseWeekKey(wk) {
+  const [y, wPart] = wk.split('-W');
+  return { year: parseInt(y), kw: parseInt(wPart) };
+}
+
 function renderBereitschaftListe() {
   const tbody = document.getElementById('berBody'); const empty = document.getElementById('berEmpty');
   if (!tbody) return;
@@ -1075,7 +1114,11 @@ function cycleStatus(wk, ma) {
   const nxt = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
   rotData[wk].employees[ma] = { task: nxt, note: '' };
   const cell = document.querySelector(`.rot-ma-cell[data-wkey="${wk}"][data-ma="${ma}"]`);
-  if (cell) cell.innerHTML = renderBadge(nxt, '');
+  if (cell) {
+    const { year, kw } = parseWeekKey(wk);
+    const ber = getBereitschaftForWeek(ma, year, kw);
+    cell.innerHTML = renderBadge(nxt, '') + renderBerBadges(ber);
+  }
   refreshReinigungHint(wk);
   scheduleRotSave();
 }
@@ -1296,7 +1339,8 @@ function renderRotation() {
       <td class="dates-cell">${fmtWeekRange(year, kw)}</td>
       ${MITARBEITER.map(ma => {
         const a = rd.employees?.[ma] || { task:'Frei', note:'' };
-        return `<td class="rot-ma-cell" data-wkey="${wk}" data-ma="${ma}" onclick="cycleStatus('${wk}','${ma}')">${renderBadge(a.task, a.note)}</td>`;
+        const ber = getBereitschaftForWeek(ma, year, kw);
+        return `<td class="rot-ma-cell" data-wkey="${wk}" data-ma="${ma}" onclick="cycleStatus('${wk}','${ma}')">${renderBadge(a.task, a.note)}${renderBerBadges(ber)}</td>`;
       }).join('')}
       <td class="reinigung-hint" data-wkey="${wk}" style="text-align:center;font-size:11px;color:var(--red);font-weight:700;">${reinigungCount < 2 && Object.keys(rd.employees||{}).length ? '⚠ nur ' + reinigungCount : ''}</td>
       <td><input class="notiz-input" style="font-size:11px;padding:3px 5px;" data-wkey="${wk}"
