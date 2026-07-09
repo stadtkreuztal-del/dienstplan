@@ -350,6 +350,7 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
       Ratten übernehmen ausschließlich Christian und Thorsten (abwechselnd, 1 Woche Aufwand, jede 3. Woche fällig) und rotieren ansonsten normal mit.
       Bei der Reinigung sind immer mindestens 2 Personen eingeplant — fehlt jemand, wird automatisch jemand aus Kontrolle/Regeneinläufe als Vertretung nachgezogen (gelb markiert).
       Einfach Jahr und Monat wählen und generieren — die App ermittelt selbst, welche Kalenderwochen zu diesem Monat gehören.
+      Bereits von Hand im Monatsplan eingetragene Tätigkeiten (mind. 3 von 5 Arbeitstagen einer Woche) werden dabei als Grundlage übernommen und nicht überschrieben.
       Alle Zellen bleiben danach per Klick manuell änderbar. Mit "In Monatsplan übertragen" wird der generierte Monat 1:1 in die Monatsplan-Seite (Reiter "📅 Monatsplan") eingetragen.
     </div>
     <div class="gen-bar">
@@ -931,6 +932,32 @@ function buildUrlaubSelect() {
   if (prev && MITARBEITER.includes(prev)) sel.value = prev;
 }
 
+// ─── Bereits im Monatsplan gesetzte Tätigkeiten als Grundlage fürs Generieren ──
+/* Ordnet die Kategorien aus dem Monatsplan den Rotations-Aufgaben zu. */
+const KAT_TO_TASK = { K: 'Kontrolle', R: 'Reinigung', RE: 'Regeneinlaeufe', Ra: 'Ratten', S: 'Sonstiges', Fr: 'Frei' };
+
+/* Prüft, ob für ma in KW year/kw bereits an mind. 3 der 5 Arbeitstage (Mo–Fr)
+   von Hand dieselbe Tätigkeit im Monatsplan eingetragen wurde. Wenn ja, wird
+   diese beim Generieren als Grundlage übernommen (statt sie zu überschreiben). */
+function getMonatsplanBasisForWeek(ma, year, kw) {
+  const start = getWeekStart(year, kw);
+  const counts = {}; const notes = {};
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    const ds = dateStr(d.getFullYear(), d.getMonth(), d.getDate());
+    const entry = data[ds]?.entries?.[ma];
+    const kat = entry?.kat;
+    if (kat && KAT_TO_TASK[kat]) {
+      counts[kat] = (counts[kat] || 0) + 1;
+      if (entry.text) notes[kat] = entry.text;
+    }
+  }
+  let bestKat = null, bestCount = 0;
+  Object.entries(counts).forEach(([k, c]) => { if (c > bestCount) { bestCount = c; bestKat = k; } });
+  if (bestKat && bestCount >= 3) return { task: KAT_TO_TASK[bestKat], note: notes[bestKat] || '' };
+  return null;
+}
+
 // ─── Sonstige Tätigkeiten / Fortbildungen (vor der Generierung einzutragen) ──
 let sonstigesData = [];
 
@@ -1331,6 +1358,14 @@ function autoGenRotation() {
     });
 
     if (rattenPerson) assign[rattenPerson] = { task: 'Ratten', note: '' };
+
+    // Bereits von Hand im Monatsplan eingetragene Tätigkeiten als Grundlage übernehmen
+    // (überschreibt die algorithmisch ermittelte Zuteilung, sofern für diese Woche
+    // mehrheitlich schon etwas eingetragen ist)
+    MITARBEITER.forEach(m => {
+      const basis = getMonatsplanBasisForWeek(m, year, kw);
+      if (basis) assign[m] = { task: basis.task, note: basis.note };
+    });
 
     // Urlaub/Frei aus Vorab-Eintragung überschreibt die Aufgabe
     MITARBEITER.forEach(m => { if (isUrlaubForWeek(m, year, kw)) assign[m] = { task: 'Urlaub', note: '' }; });
