@@ -806,6 +806,12 @@ function renderOverview() {
 // rotData[wk] = { employees: { 'Name': { task:'Reinigung', note:'' } }, note:'' }
 let rotData = {};
 let rotSaveTimer = null;
+// rotSlots[slotName] = { employee, sinceYear, sinceKW } — merkt sich, wer eine Aufgabe seit wann
+// durchgehend hat, damit "Auto-Generieren" für den nächsten Monat nahtlos fortsetzt statt neu zu mischen.
+let rotSlots = {};
+// rattenState merkt sich den Ratten-Turnus (wer als Nächstes dran ist, wann zuletzt Ratten war),
+// damit der 3-Wochen-Rhythmus über Monatsgrenzen hinweg korrekt weiterläuft.
+let rattenState = { idx: 0, lastYear: null, lastKW: null };
 
 const ROT_TASKS = ['Reinigung','Kontrolle','Regeneinlaeufe']; // rotieren im 4-Wochen-Rhythmus, je 2 Personen
 const RATTEN_LEUTE = ['Christian Leyener','Thorsten Nitschke']; // exklusiv für Ratten
@@ -816,12 +822,18 @@ const TASK_LABEL = { Reinigung:'Reinigung', Kontrolle:'Kontrolle', Regeneinlaeuf
 async function loadRotData() {
   try {
     const snap = await db.collection('dienstplan_app').doc('rotation').get();
-    rotData = snap.exists ? (snap.data().rotData || {}) : {};
-  } catch (err) { console.error('Ladefehler (rotation):', err); rotData = {}; }
+    const d = snap.exists ? snap.data() : {};
+    rotData = d.rotData || {};
+    rotSlots = d.rotSlots || {};
+    rattenState = d.rattenState || { idx: 0, lastYear: null, lastKW: null };
+  } catch (err) {
+    console.error('Ladefehler (rotation):', err);
+    rotData = {}; rotSlots = {}; rattenState = { idx: 0, lastYear: null, lastKW: null };
+  }
 }
 
 async function saveRotData() {
-  try { await db.collection('dienstplan_app').doc('rotation').set({ rotData }); return true; }
+  try { await db.collection('dienstplan_app').doc('rotation').set({ rotData, rotSlots, rattenState }); return true; }
   catch (err) { console.error('Speicherfehler (rotation):', err); return false; }
 }
 
@@ -836,6 +848,17 @@ function scheduleRotSave() {
 }
 
 function weekKey(year, kw) { return `${year}-W${String(kw).padStart(2,'0')}`; }
+
+/* Fortlaufende "absolute" Wochennummer über Jahresgrenzen hinweg (Näherung: 52 Wochen/Jahr,
+   konsistent mit der übrigen vereinfachten ISO-Wochen-Handhabung dieser App). Damit lässt sich
+   die Dauer einer Zuweisung ("seit wann") auch über einen Monats-/Jahreswechsel hinweg korrekt
+   berechnen, statt bei jeder Generierung bei 0 neu anzufangen. */
+function absWeek(year, kw) { return year * 52 + kw; }
+function absToYearKW(abs) {
+  const year = Math.floor((abs - 1) / 52);
+  const kw = abs - year * 52;
+  return { year, kw };
+}
 
 /* Ermittelt, welche Kalenderwochen zu einem Monat gehören (für die Monats-Auswahl
    bei der Generierung). Näherung: erste KW = KW des 1. Tages, letzte KW = KW des
@@ -1154,36 +1177,65 @@ function autoGenRotation() {
 
   const taskCounts = computeTaskCounts(String(year));
 
-  // 6 Slots: je 2 je rotierender Aufgabe, Start-Besetzung reihum
+  // 6 Slots: je 2 je rotierender Aufgabe.
   const slotNames = [];
   ROT_TASKS.forEach(t => slotNames.push(t + '-1', t + '-2'));
   const order = [...MITARBEITER];
-  const slots = {};
-  slotNames.forEach((sn, i) => { slots[sn] = { employee: order[i % order.length], sinceKW: start }; });
 
-  let rattenIdx = firstC ? 0 : 1;
+  // Bestehenden Rotationsstand (wer hat welche Aufgabe seit wann) fortsetzen, sofern schon
+  // einmal generiert wurde. Nur beim allerersten Lauf (kein gespeicherter Stand vorhanden)
+  // wird reihum neu verteilt. So verschiebt sich beim Generieren des nächsten Monats nichts
+  // mehr, was eigentlich noch mitten in seinen ~4 Wochen steckt.
+  const haveSlots = slotNames.every(sn => rotSlots[sn] && MITARBEITER.includes(rotSlots[sn].employee));
+  const slots = {};
+  slotNames.forEach((sn, i) => {
+    if (haveSlots) {
+      const s = rotSlots[sn];
+      slots[sn] = { employee: s.employee, sinceAbs: absWeek(s.sinceYear, s.sinceKW) };
+    } else {
+      // Zeitversetzter Start: Ohne bereits gespeicherten Rotationsstand würden sonst alle
+      // 6 Slots zum selben Zeitpunkt "seit" gesetzt, wodurch nach dem ersten 4-Wochen-Block
+      // ALLE Mitarbeiter gleichzeitig in derselben Woche wechseln. Slot i gilt hier bereits
+      // i Wochen früher als begonnen, sodass die ersten Wechsel über mehrere Wochen verteilt
+      // eintreten (auch die beiden Kollegen derselben Aufgabe wechseln dann nicht mehr
+      // gleichzeitig). Ab dem zweiten Monat läuft die Staffelung dann organisch über den
+      // gespeicherten rotSlots-Stand weiter.
+      slots[sn] = { employee: order[i % order.length], sinceAbs: absWeek(year, start) + i };
+    }
+  });
+
+  // Ratten-Turnus ebenso fortsetzen; "Erster Ratten-Dienst" gilt nur, wenn es noch keinen
+  // gespeicherten Turnus gibt (also beim allerersten Generieren überhaupt).
+  const haveRatten = rattenState.lastYear !== null;
+  let rattenIdx = haveRatten ? rattenState.idx : (firstC ? 0 : 1);
+  let nextRattenAbs = haveRatten
+    ? absWeek(rattenState.lastYear, rattenState.lastKW) + RATTEN_ZYKLUS
+    : absWeek(year, start) + (RATTEN_ZYKLUS - 1);
+  let lastRattenAbs = haveRatten ? absWeek(rattenState.lastYear, rattenState.lastKW) : null;
 
   for (let kw = start; kw <= end; kw++) {
-    const wIdx = kw - start;
-    const isRattenWeek = wIdx % RATTEN_ZYKLUS === (RATTEN_ZYKLUS - 1); // jede 3. Woche
+    const curAbs = absWeek(year, kw);
+    const isRattenWeek = curAbs >= nextRattenAbs;
     let rattenPerson = null;
     if (isRattenWeek) {
       rattenPerson = RATTEN_LEUTE[rattenIdx % RATTEN_LEUTE.length];
       rattenIdx++;
+      lastRattenAbs = curAbs;
+      nextRattenAbs = curAbs + RATTEN_ZYKLUS;
     }
 
     // Slot-Rotation: nach ROT_BLOCK_WOCHEN neu besetzen (die neue Person startet
     // in dieser Woche -> Übergabewoche, in der beide "sichtbar" die Aufgabe tragen)
     slotNames.forEach(sn => {
       const slot = slots[sn];
-      if (kw - slot.sinceKW >= ROT_BLOCK_WOCHEN) {
+      if (curAbs - slot.sinceAbs >= ROT_BLOCK_WOCHEN) {
         const taskKey = sn.split('-')[0];
         const busy = new Set(slotNames.map(s2 => slots[s2].employee));
         if (rattenPerson) busy.add(rattenPerson);
         let cands = MITARBEITER.filter(m => m !== slot.employee && !busy.has(m));
         if (!cands.length) cands = MITARBEITER.filter(m => m !== slot.employee);
         cands.sort((a,b) => taskCounts[a][taskKey] - taskCounts[b][taskKey]);
-        slots[sn] = { employee: cands[0] || slot.employee, sinceKW: kw, handoverFrom: slot.employee };
+        slots[sn] = { employee: cands[0] || slot.employee, sinceAbs: curAbs, handoverFrom: slot.employee };
       }
     });
 
@@ -1195,7 +1247,7 @@ function autoGenRotation() {
     slotNames.forEach(sn => {
       const slot = slots[sn];
       const taskKey = sn.split('-')[0];
-      const isHandoverWeek = slot.handoverFrom && slot.sinceKW === kw;
+      const isHandoverWeek = slot.handoverFrom && slot.sinceAbs === curAbs;
       assign[slot.employee] = { task: taskKey, note: isHandoverWeek ? ('Übergabe von ' + slot.handoverFrom.split(' ')[0]) : '' };
     });
 
@@ -1205,7 +1257,7 @@ function autoGenRotation() {
     slotNames.forEach(sn => {
       const slot = slots[sn];
       const taskKey = sn.split('-')[0];
-      if (slot.handoverFrom && slot.sinceKW === kw) {
+      if (slot.handoverFrom && slot.sinceAbs === curAbs) {
         const prev = slot.handoverFrom;
         if (assign[prev].task === 'Frei') {
           assign[prev] = { task: taskKey, note: 'Übergabe an ' + slot.employee.split(' ')[0] };
@@ -1236,6 +1288,17 @@ function autoGenRotation() {
     const existingNote = rotData[wk]?.note || '';
     const employees = {}; MITARBEITER.forEach(m => employees[m] = assign[m]);
     rotData[wk] = { employees, note: existingNote };
+  }
+
+  // Rotationsstand für die nächste Generierung (nächster Monat) persistieren.
+  slotNames.forEach(sn => {
+    const s = slots[sn];
+    const { year: sy, kw: sk } = absToYearKW(s.sinceAbs);
+    rotSlots[sn] = { employee: s.employee, sinceYear: sy, sinceKW: sk };
+  });
+  if (lastRattenAbs !== null) {
+    const { year: ry, kw: rk } = absToYearKW(lastRattenAbs);
+    rattenState = { idx: rattenIdx, lastYear: ry, lastKW: rk };
   }
 
   renderRotation();
