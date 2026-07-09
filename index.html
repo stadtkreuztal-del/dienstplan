@@ -43,8 +43,8 @@ main { padding: 20px; max-width: 1600px; margin: 0 auto; }
 #syncStatus { font-size: 11px; color: var(--muted); margin-left: auto; }
 
 /* Grid table */
-.grid-wrap { overflow-x: auto; }
-.grid-table { border-collapse: collapse; min-width: 900px; width: 100%; }
+.grid-wrap { overflow: auto; max-height: 74vh; border-radius: 6px; }
+.grid-table { border-collapse: collapse; min-width: 900px; width: 100%; zoom: 1; }
 .grid-table th { background: var(--blue); color: white; padding: 8px 6px; font-size: 12px; text-align: center; white-space: nowrap; position: sticky; top: 0; z-index: 10; }
 .grid-table th.th-date { text-align: left; padding-left: 10px; min-width: 75px; }
 .grid-table th.th-day { min-width: 28px; }
@@ -117,8 +117,11 @@ tr.is-weekend .cell-input, tr.is-weekend .kat-sel { opacity: 0.35; }
   .card { border: none; padding: 0; margin: 0; background: white; }
   .month-nav { background: none; border: none; padding: 0 0 6px 0; justify-content: flex-start; }
   .month-nav h2 { text-align: left; min-width: 0; color: #000; }
-  .grid-wrap { overflow: visible; }
-  .grid-table { width: 100%; min-width: 0; font-size: 7.5px; table-layout: fixed; }
+  .grid-wrap { overflow: visible; max-height: none; }
+  .grid-table { width: 100%; min-width: 0; font-size: 7.5px; table-layout: fixed; zoom: 1 !important; }
+  .ber-toggle { display: flex !important; gap: 1px; }
+  .ber-btn { border: none !important; background: transparent !important; padding: 0 !important; font-size: 6.5px !important; }
+  .ber-btn:not(.active) { display: none !important; }
   .grid-table th { background: #444 !important; color: #fff !important; padding: 2px 3px; }
   .grid-table td { padding: 1px 2px; border: 1px solid #ccc; }
   .td-date, .td-day, .td-kw { color: #000 !important; }
@@ -169,6 +172,14 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
 .ber-flag { display:inline-block; font-size:9px; font-weight:700; border-radius:3px; padding:1px 5px; margin-top:3px; margin-right:3px; }
 .ber-Ruf    { background:#9b59b6; color:#fff; }
 .ber-Winter { background:#5dade2; color:#0a1e2b; }
+
+/* Bereitschaft manuell umschaltbar im Monatsplan */
+.ber-toggle { display:flex; gap:3px; margin-top:3px; }
+.ber-btn { border:1px solid var(--border); background:transparent; border-radius:3px; font-size:10px; line-height:1.4; padding:1px 5px; cursor:pointer; opacity:0.4; color:var(--text); }
+.ber-btn:hover { opacity:0.75; }
+.ber-btn.active { opacity:1; }
+.ber-btn-Ruf.active { background:#9b59b6; border-color:#9b59b6; color:#fff; }
+.ber-btn-Winter.active { background:#5dade2; border-color:#5dade2; color:#0a1e2b; }
 
 /* Urlaub-Verwaltung */
 .urlaub-form { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
@@ -230,6 +241,11 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
     <h2 id="monthTitle">—</h2>
     <button class="btn btn-ghost no-print" onclick="changeMonth(+1)">Nächster ▶</button>
     <button class="btn btn-primary no-print" onclick="window.print()">🖨 Drucken</button>
+    <div class="no-print" style="display:flex;align-items:center;gap:6px;margin-left:10px;">
+      <label style="font-size:11px;color:var(--muted);">🔍 Größe:</label>
+      <input type="range" id="gridZoom" min="50" max="150" step="5" value="100" oninput="setGridZoom(this.value)" style="width:110px;">
+      <span id="gridZoomVal" style="font-size:11px;color:var(--muted);min-width:34px;">100%</span>
+    </div>
     <div class="no-print" style="font-size:12px;color:var(--muted);margin-left:8px;">Änderungen werden automatisch gespeichert.</div>
     <span id="syncStatus2" class="no-print" style="margin-left:auto;font-size:11px;color:var(--muted);"></span>
   </div>
@@ -244,8 +260,8 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
     <div class="leg-item"><div class="leg-dot" style="background:#888"></div>Frei</div>
     <div class="leg-item"><div class="leg-dot" style="background:#2a1f00;border:1px solid var(--blue-light)"></div>Feiertag (NRW)</div>
     <div class="leg-item"><div class="leg-dot" style="background:#181c24;border:1px solid #3a4455"></div>Wochenende</div>
-    <div class="leg-item"><span class="ber-flag ber-Ruf">📞 Ruf</span>Rufbereitschaft</div>
-    <div class="leg-item"><span class="ber-flag ber-Winter">❄ Winter</span>Winterdienst</div>
+    <div class="leg-item"><span class="ber-flag ber-Ruf">📞 Ruf</span>Rufbereitschaft (Klick auf 📞-Button in der Zelle zum Umschalten)</div>
+    <div class="leg-item"><span class="ber-flag ber-Winter">❄ Winter</span>Winterdienst (Klick auf ❄-Button in der Zelle zum Umschalten)</div>
   </div>
 
   <div class="card" style="padding: 12px;">
@@ -501,8 +517,8 @@ function checkPassword() {
   }
 })();
 
-const MITARBEITER = ['Stefan Bertelmann','Christian Leyener','Zakir Memic','Thorsten Nitschke','Rainer Wurmbach','Isah Zeppenfeld'];
-const MA_SHORT = ['Stefan','Christian','Zakir','Thorsten','Rainer','Isah'];
+const MITARBEITER = ['Stefan Bertelmann','Christian Leyener','Zakir Memic','Thorsten Nitschke','Rainer Wurmbach'];
+const MA_SHORT = ['Stefan','Christian','Zakir','Thorsten','Rainer'];
 const SK = 'dienstplan_v1';
 const TAGE_KURZ = ['So','Mo','Di','Mi','Do','Fr','Sa'];
 const MONATE_LANG = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
@@ -691,7 +707,6 @@ function renderGrid() {
       ).join('');
       const k = katInfo(entry.kat);
       const katBg = k.color ? `background:${k.color};color:${k.textColor};border-color:${k.color};` : '';
-      const berDay = getBereitschaftForDay(ma, ds);
       html += `<td class="td-ma">
         <div class="cell-inner">
           <select class="kat-sel" style="${katBg}" data-date="${ds}" data-ma="${ma}" onchange="onKatChange(this)">${katOpts}</select>
@@ -699,7 +714,7 @@ function renderGrid() {
             value="${(entry.text||'').replace(/"/g,'&quot;')}"
             placeholder="${isWeekend && !feiertag ? '' : 'Eintrag…'}"
             oninput="onTextChange(this)">
-          ${renderBerBadges(berDay)}
+          ${renderBerToggle(ds, ma, entry)}
         </div>
       </td>`;
     });
@@ -1104,6 +1119,56 @@ function renderBerBadges(arts) {
   return arts.map(a => `<span class="ber-flag ber-${a}">${BER_LABEL_SHORT[a] || a}</span>`).join('');
 }
 
+/* Manuell umschaltbare Rufbereitschaft/Winterdienst direkt im Monatsplan.
+   Ergänzt die über den Rotationsplan (Zeitraum) eingetragene Bereitschaft:
+   ein Tag zeigt "aktiv", wenn er entweder manuell hier gesetzt ODER durch
+   einen Zeitraum-Eintrag abgedeckt ist. Der Klick hier setzt/löscht immer
+   nur das manuelle Tages-Flag. */
+function renderBerToggle(ds, ma, entry) {
+  const rangeArts = getBereitschaftForDay(ma, ds);
+  const rufActive = !!entry.ruf || rangeArts.includes('Ruf');
+  const winterActive = !!entry.winter || rangeArts.includes('Winter');
+  const maEsc = ma.replace(/'/g, "\\'");
+  return `<div class="ber-toggle">
+    <button type="button" class="ber-btn ber-btn-Ruf ${rufActive ? 'active' : ''}" title="Rufbereitschaft ${rufActive ? '(aktiv – Klick zum Ausschalten)' : '(Klick zum Einschalten)'}" onclick="toggleBer('${ds}','${maEsc}','ruf')">📞</button>
+    <button type="button" class="ber-btn ber-btn-Winter ${winterActive ? 'active' : ''}" title="Winterdienst ${winterActive ? '(aktiv – Klick zum Ausschalten)' : '(Klick zum Einschalten)'}" onclick="toggleBer('${ds}','${maEsc}','winter')">❄</button>
+  </div>`;
+}
+
+function toggleBer(ds, ma, art) {
+  const entry = maEntry(ds, ma);
+  if (art === 'ruf') entry.ruf = !entry.ruf; else entry.winter = !entry.winter;
+  scheduleSave();
+
+  // Nur die betroffene Zelle aktualisieren, ohne die ganze Tabelle neu zu rendern
+  const cell = document.querySelector(`.td-ma .ber-toggle button[onclick*="'${ds}','${ma.replace(/'/g,"\\'")}'"]`)?.closest('.cell-inner');
+  if (cell) {
+    const toggleDiv = cell.querySelector('.ber-toggle');
+    if (toggleDiv) toggleDiv.outerHTML = renderBerToggle(ds, ma, entry);
+  } else {
+    renderGrid();
+  }
+}
+
+function setGridZoom(val) {
+  const pct = parseInt(val, 10) || 100;
+  const valEl = document.getElementById('gridZoomVal');
+  if (valEl) valEl.textContent = pct + '%';
+  const table = document.getElementById('gridTable');
+  if (table) table.style.zoom = (pct / 100);
+  try { localStorage.setItem('dienstplan_zoom', String(pct)); } catch (e) {}
+}
+
+function restoreGridZoom() {
+  let saved = null;
+  try { saved = localStorage.getItem('dienstplan_zoom'); } catch (e) {}
+  if (saved) {
+    const slider = document.getElementById('gridZoom');
+    if (slider) slider.value = saved;
+    setGridZoom(saved);
+  }
+}
+
 function parseWeekKey(wk) {
   const [y, wPart] = wk.split('-W');
   return { year: parseInt(y), kw: parseInt(wPart) };
@@ -1464,6 +1529,7 @@ async function startApp() {
   setSyncStatus('✓ Verbunden mit Firestore', true);
 
   renderGrid();
+  restoreGridZoom();
   populateOvFilters();
   buildUrlaubSelect();
   buildSonstigesSelect();
