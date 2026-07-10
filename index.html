@@ -1248,7 +1248,7 @@ function refreshReinigungHint(wk) {
 // ─── Automatische Generierung ─────────────────────────────────
 /* Ermittelt für jeden Mitarbeiter die bisherige Wochenanzahl je Aufgabe aus
    ALLEN bereits gespeicherten Jahren/Wochen (Fairness über die Zeit hinweg). */
-function computeTaskCounts(excludeYear) {
+function computeTaskCounts(excludeYear, prevYear, prevMonthIdx) {
   const counts = {};
   MITARBEITER.forEach(m => counts[m] = { Reinigung:0, Kontrolle:0, Regeneinlaeufe:0, Ratten:0 });
   Object.entries(rotData).forEach(([wk, rd]) => {
@@ -1258,7 +1258,77 @@ function computeTaskCounts(excludeYear) {
       if (t && counts[m][t] !== undefined) counts[m][t]++;
     });
   });
+  // Zusätzlich den ganzen Vormonat aus dem Monatsplan mitzählen, sofern für die
+  // jeweilige Woche noch kein Rotationsplan-Eintrag existiert (z. B. weil dort
+  // ausschließlich von Hand im Monatsplan eingetragen wurde, ohne zu generieren).
+  if (prevYear !== undefined && prevMonthIdx !== undefined) {
+    const { start, end } = monthWeekRange(prevYear, prevMonthIdx);
+    for (let kw = start; kw <= end; kw++) {
+      if (rotData[weekKey(prevYear, kw)]) continue; // schon oben gezählt
+      MITARBEITER.forEach(m => {
+        const basis = getMonatsplanBasisForWeek(m, prevYear, kw);
+        if (basis && counts[m][basis.task] !== undefined) counts[m][basis.task]++;
+      });
+    }
+  }
   return counts;
+}
+
+function prevMonthOf(year, month) {
+  return month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 };
+}
+
+/* Liest den kompletten Vormonat aus dem Monatsplan aus (unabhängig davon, ob er
+   damals generiert oder von Hand eingetragen wurde) und leitet daraus ab:
+   - wer zuletzt welche der 3 rotierenden Aufgaben hatte (taskHolders)
+   - seit wie vielen zusammenhängenden Wochen (innerhalb des Vormonats) das schon so ist (since)
+   - wer zuletzt Ratten hatte und in welcher Woche (rattenLast)
+   Das dient als verlässliche Grundlage für die Fortsetzung der Rotation, auch wenn
+   der interne Rotationsstand (rotSlots/rattenState) nicht mehr mit dem tatsächlich
+   im Monatsplan stehenden Vormonat übereinstimmt. */
+function deriveSlotsFromPreviousMonth(year, month) {
+  const { year: py, month: pm } = prevMonthOf(year, month);
+  const { start, end } = monthWeekRange(py, pm);
+  const perWeek = [];
+  for (let kw = start; kw <= end; kw++) {
+    const assign = {};
+    MITARBEITER.forEach(m => {
+      const basis = getMonatsplanBasisForWeek(m, py, kw);
+      if (basis) assign[m] = basis.task;
+    });
+    perWeek.push({ abs: absWeek(py, kw), assign });
+  }
+  if (!perWeek.length) return null;
+  const last = perWeek[perWeek.length - 1];
+
+  const taskHolders = {};
+  ROT_TASKS.forEach(t => taskHolders[t] = []);
+  MITARBEITER.forEach(m => {
+    const t = last.assign[m];
+    if (t && taskHolders[t]) taskHolders[t].push(m);
+  });
+
+  // Letzte Ratten-Zuweisung im Vormonat suchen (rückwärts ab der letzten Woche)
+  let rattenLast = null;
+  for (let i = perWeek.length - 1; i >= 0 && !rattenLast; i--) {
+    const hit = MITARBEITER.find(m => perWeek[i].assign[m] === 'Ratten');
+    if (hit) rattenLast = { abs: perWeek[i].abs, employee: hit };
+  }
+
+  // Für jeden MA mit Aufgabe in der letzten Woche: wie viele Wochen am Stück
+  // (innerhalb des Vormonats) hatte er/sie diese Aufgabe schon durchgehend?
+  const since = {};
+  MITARBEITER.forEach(m => {
+    const t = last.assign[m];
+    if (!t) return;
+    let streak = 1;
+    for (let i = perWeek.length - 2; i >= 0; i--) {
+      if (perWeek[i].assign[m] === t) streak++; else break;
+    }
+    since[m] = { task: t, sinceAbs: last.abs - (streak - 1) };
+  });
+
+  return { since, taskHolders, rattenLast };
 }
 
 function autoGenRotation() {
@@ -1267,7 +1337,13 @@ function autoGenRotation() {
   const { start, end } = monthWeekRange(year, month);
   const firstC = document.getElementById('genRattenStart').value === 'C';
 
-  const taskCounts = computeTaskCounts(String(year));
+  const { year: prevYear, month: prevMonth } = prevMonthOf(year, month);
+  const taskCounts = computeTaskCounts(String(year), prevYear, prevMonth);
+
+  // Der ganze Vormonat wird aus dem Monatsplan ausgelesen (siehe deriveSlotsFromPreviousMonth)
+  // und dient als verlässliche Grundlage für die Fortsetzung, unabhängig davon, ob der
+  // interne Rotationsstand noch aktuell ist (z. B. weil zwischenzeitlich von Hand geändert wurde).
+  const prevInfo = deriveSlotsFromPreviousMonth(year, month);
 
   // 6 Slots: je 2 je rotierender Aufgabe.
   const slotNames = [];
@@ -1280,7 +1356,29 @@ function autoGenRotation() {
   // mehr, was eigentlich noch mitten in seinen ~4 Wochen steckt.
   const haveSlots = slotNames.every(sn => rotSlots[sn] && MITARBEITER.includes(rotSlots[sn].employee));
   const slots = {};
+  const claimed = new Set(); // verhindert, dass beide Slots derselben Aufgabe denselben MA bekommen
   slotNames.forEach((sn, i) => {
+    const taskKey = sn.split('-')[0];
+
+    // 1) Bevorzugt: Stand aus dem tatsächlichen Vormonat (Monatsplan) ableiten.
+    if (prevInfo) {
+      let ma = null;
+      if (haveSlots && prevInfo.since[rotSlots[sn].employee]?.task === taskKey) {
+        ma = rotSlots[sn].employee; // bisheriger Slot-Inhaber, durch Monatsplan bestätigt
+      } else {
+        // Wer zeigt laut Monatsplan diese Aufgabe zuletzt, ist aber noch keinem Slot zugeordnet?
+        ma = (prevInfo.taskHolders[taskKey] || []).find(m => !claimed.has(m));
+      }
+      if (ma) {
+        claimed.add(ma);
+        const sinceAbs = prevInfo.since[ma]?.sinceAbs ?? (absWeek(year, start) + i);
+        slots[sn] = { employee: ma, sinceAbs };
+        return;
+      }
+    }
+
+    // 2) Fallback: bisherigen gespeicherten Rotationsstand fortsetzen, oder beim
+    //    allerersten Lauf zeitversetzt reihum starten.
     if (haveSlots) {
       const s = rotSlots[sn];
       slots[sn] = { employee: s.employee, sinceAbs: absWeek(s.sinceYear, s.sinceKW) };
@@ -1296,14 +1394,18 @@ function autoGenRotation() {
     }
   });
 
-  // Ratten-Turnus ebenso fortsetzen; "Erster Ratten-Dienst" gilt nur, wenn es noch keinen
-  // gespeicherten Turnus gibt (also beim allerersten Generieren überhaupt).
+  // Ratten-Turnus ebenso fortsetzen; bevorzugt anhand der letzten Ratten-Zuweisung im
+  // tatsächlichen Vormonat (Monatsplan), sonst über den gespeicherten Turnus, sonst
+  // "Erster Ratten-Dienst" (nur beim allerersten Generieren überhaupt).
   const haveRatten = rattenState.lastYear !== null;
   let rattenIdx = haveRatten ? rattenState.idx : (firstC ? 0 : 1);
-  let nextRattenAbs = haveRatten
-    ? absWeek(rattenState.lastYear, rattenState.lastKW) + RATTEN_ZYKLUS
-    : absWeek(year, start) + (RATTEN_ZYKLUS - 1);
   let lastRattenAbs = haveRatten ? absWeek(rattenState.lastYear, rattenState.lastKW) : null;
+  if (prevInfo && prevInfo.rattenLast) {
+    lastRattenAbs = prevInfo.rattenLast.abs;
+    const idxInCycle = RATTEN_LEUTE.indexOf(prevInfo.rattenLast.employee);
+    if (idxInCycle !== -1) rattenIdx = idxInCycle + 1;
+  }
+  let nextRattenAbs = lastRattenAbs !== null ? lastRattenAbs + RATTEN_ZYKLUS : absWeek(year, start) + (RATTEN_ZYKLUS - 1);
 
   for (let kw = start; kw <= end; kw++) {
     const curAbs = absWeek(year, kw);
