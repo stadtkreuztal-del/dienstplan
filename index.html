@@ -822,17 +822,35 @@ function renderOverview() {
 // rotData[wk] = { employees: { 'Name': { task:'Reinigung', note:'' } }, note:'' }
 let rotData = {};
 let rotSaveTimer = null;
-// rotSlots[slotName] = { employee, sinceYear, sinceKW } — merkt sich, wer eine Aufgabe seit wann
-// durchgehend hat, damit "Auto-Generieren" für den nächsten Monat nahtlos fortsetzt statt neu zu mischen.
-let rotSlots = {};
-// rattenState merkt sich den Ratten-Turnus (wer als Nächstes dran ist, wann zuletzt Ratten war),
-// damit der 3-Wochen-Rhythmus über Monatsgrenzen hinweg korrekt weiterläuft.
-let rattenState = { idx: 0, lastYear: null, lastKW: null };
 
-const ROT_TASKS = ['Reinigung','Kontrolle','Regeneinlaeufe']; // rotieren im 4-Wochen-Rhythmus, je 2 Personen
-const RATTEN_LEUTE = ['Christian Leyener','Thorsten Nitschke']; // exklusiv für Ratten
-const ROT_BLOCK_WOCHEN = 4;  // Länge einer regulären Zuweisung je Aufgabe
-const RATTEN_ZYKLUS = 3;     // alle X Wochen ist 1 Woche Ratten fällig
+/* ── Stühle-Modell ──────────────────────────────────────────
+   5 Mitarbeiter, 5 "Stühle": Wer auf welchem Stuhl sitzt, wechselt alle 4 Wochen
+   (Regel 1). Jeder Stuhl hat eine feste oder variable Aufgabe:
+   - R1, R2: immer Reinigung (Regel 2: Reinigung IMMER mit 2 Personen)
+   - X1: immer Kontrolle
+   - X2: immer Regeneinläufe
+   - X3 ("Springer"): wechselt bei jedem Stuhlwechsel fairness-basiert zwischen
+     Kontrolle und Regeneinläufe (wer von beiden bislang insgesamt weniger
+     Wochen hatte, bekommt den Springer) — das bildet ab, dass eine der beiden
+     Aufgaben auch mal allein gefahren werden kann.
+   Wechselt eine Person weg von einem Stuhl, überschneidet sie sich mit der
+   neuen Person eine Woche auf DERSELBEN Aufgabe (Übergabewoche, Regel 4).
+   Da jeder Stuhl unabhängig alle 4 Wochen wechselt, laufen die Wechsel
+   versetzt/asynchron über die Belegschaft. */
+const CHAIR_IDS = ['R1','R2','X1','X2','X3'];
+const CHAIR_FIXED_TASK = { R1:'Reinigung', R2:'Reinigung', X1:'Kontrolle', X2:'Regeneinlaeufe' }; // X3 = variabel
+let chairState = {}; // chairState[chairId] = { employee, task, sinceAbs, handoverFrom?, handoverTask? }
+
+/* Ratten-Turnus: alle 3 Wochen (Regel 3) 1 Woche Ratten, abwechselnd Christian/Thorsten
+   solo. Jede 3. Ratten-Runde ist eine "große Runde", in der beide gemeinsam fahren
+   (wünschenswert, aber kein Muss – z. B. bei Urlaub fällt es auf eine Person zurück). */
+let rattenState = { roundCount: 0, lastAbs: null, soloIdx: 0 };
+
+const ROT_TASKS = ['Reinigung','Kontrolle','Regeneinlaeufe']; // rotieren im 4-Wochen-Rhythmus (Regel 1)
+const RATTEN_LEUTE = ['Christian Leyener','Thorsten Nitschke']; // exklusiv für Ratten (Regel 3)
+const ROT_BLOCK_WOCHEN = 4;      // Länge einer regulären Zuweisung je Stuhl (Regel 1)
+const RATTEN_ZYKLUS = 3;         // alle X Wochen ist 1 Woche Ratten fällig (Regel 3)
+const RATTEN_GROSSE_RUNDE = 3;   // jede X-te Ratten-Runde fahren beide gemeinsam
 const TASK_LABEL = { Reinigung:'Reinigung', Kontrolle:'Kontrolle', Regeneinlaeufe:'Regeneinläufe', Ratten:'Ratten', Urlaub:'Urlaub', Sonstiges:'Sonstiges', Frei:'Frei' };
 
 async function loadRotData() {
@@ -840,16 +858,18 @@ async function loadRotData() {
     const snap = await db.collection('dienstplan_app').doc('rotation').get();
     const d = snap.exists ? snap.data() : {};
     rotData = d.rotData || {};
-    rotSlots = d.rotSlots || {};
-    rattenState = d.rattenState || { idx: 0, lastYear: null, lastKW: null };
+    chairState = d.chairState || {};
+    rattenState = (d.rattenState && typeof d.rattenState.roundCount === 'number')
+      ? d.rattenState
+      : { roundCount: 0, lastAbs: null, soloIdx: 0 };
   } catch (err) {
     console.error('Ladefehler (rotation):', err);
-    rotData = {}; rotSlots = {}; rattenState = { idx: 0, lastYear: null, lastKW: null };
+    rotData = {}; chairState = {}; rattenState = { roundCount: 0, lastAbs: null, soloIdx: 0 };
   }
 }
 
 async function saveRotData() {
-  try { await db.collection('dienstplan_app').doc('rotation').set({ rotData, rotSlots, rattenState }); return true; }
+  try { await db.collection('dienstplan_app').doc('rotation').set({ rotData, chairState, rattenState }); return true; }
   catch (err) { console.error('Speicherfehler (rotation):', err); return false; }
 }
 
@@ -1278,15 +1298,27 @@ function prevMonthOf(year, month) {
   return month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 };
 }
 
+/* Wählt fairness-basiert die Aufgabe des "Springer"-Stuhls X3: Kontrolle und
+   Regeneinläufe im Vergleich über ALLE bisherigen Wochen/Mitarbeiter — wer von
+   beiden insgesamt weniger Wochen hatte, bekommt den Springer zugeteilt.
+   Bei Gleichstand wird Kontrolle bevorzugt (siehe Vorgabe). */
+function pickFloatTask(taskCounts) {
+  const totalK = MITARBEITER.reduce((s, m) => s + taskCounts[m].Kontrolle, 0);
+  const totalR = MITARBEITER.reduce((s, m) => s + taskCounts[m].Regeneinlaeufe, 0);
+  return totalR < totalK ? 'Regeneinlaeufe' : 'Kontrolle';
+}
+
+function chairTaskDefault(id, taskCounts) {
+  return CHAIR_FIXED_TASK[id] || pickFloatTask(taskCounts);
+}
+
 /* Liest den kompletten Vormonat aus dem Monatsplan aus (unabhängig davon, ob er
-   damals generiert oder von Hand eingetragen wurde) und leitet daraus ab:
-   - wer zuletzt welche der 3 rotierenden Aufgaben hatte (taskHolders)
-   - seit wie vielen zusammenhängenden Wochen (innerhalb des Vormonats) das schon so ist (since)
-   - wer zuletzt Ratten hatte und in welcher Woche (rattenLast)
-   Das dient als verlässliche Grundlage für die Fortsetzung der Rotation, auch wenn
-   der interne Rotationsstand (rotSlots/rattenState) nicht mehr mit dem tatsächlich
-   im Monatsplan stehenden Vormonat übereinstimmt. */
-function deriveSlotsFromPreviousMonth(year, month) {
+   damals generiert oder von Hand eingetragen wurde) und leitet daraus den
+   Stühle-Zustand (chairState) sowie die letzte Ratten-Zuweisung ab. Das dient
+   als verlässliche Grundlage für die Fortsetzung der Rotation, auch wenn der
+   interne, gespeicherte Zustand nicht mehr mit dem tatsächlich im Monatsplan
+   stehenden Vormonat übereinstimmt (z. B. weil von Hand geändert wurde). */
+function deriveStateFromPreviousMonth(year, month) {
   const { year: py, month: pm } = prevMonthOf(year, month);
   const { start, end } = monthWeekRange(py, pm);
   const perWeek = [];
@@ -1299,36 +1331,53 @@ function deriveSlotsFromPreviousMonth(year, month) {
     perWeek.push({ abs: absWeek(py, kw), assign });
   }
   if (!perWeek.length) return null;
-  const last = perWeek[perWeek.length - 1];
 
-  const taskHolders = {};
-  ROT_TASKS.forEach(t => taskHolders[t] = []);
+  // Aufgabe + durchgehende Wochenzahl je Mitarbeiter ermitteln. Ratten-Wochen
+  // pausieren die Zählung (Regel: Ratten unterbricht, bricht den Block aber
+  // nicht ab), Urlaub/Sonstiges/Frei brechen die Ableitung ab (keine verlässliche
+  // Aussage über die rotierende Aufgabe mehr möglich).
+  const empInfo = {};
   MITARBEITER.forEach(m => {
-    const t = last.assign[m];
-    if (t && taskHolders[t]) taskHolders[t].push(m);
+    let lastTask = null, lastIdx = -1;
+    for (let i = perWeek.length - 1; i >= 0; i--) {
+      const t = perWeek[i].assign[m];
+      if (t === 'Ratten') continue;
+      if (ROT_TASKS.includes(t)) { lastTask = t; lastIdx = i; break; }
+      if (t) break;
+    }
+    if (!lastTask) return;
+    let activeWeeks = 1;
+    for (let i = lastIdx - 1; i >= 0; i--) {
+      const t = perWeek[i].assign[m];
+      if (t === 'Ratten') continue;
+      if (t === lastTask) { activeWeeks++; continue; }
+      break;
+    }
+    empInfo[m] = { task: lastTask, sinceAbs: perWeek[lastIdx].abs - (activeWeeks - 1) };
   });
 
-  // Letzte Ratten-Zuweisung im Vormonat suchen (rückwärts ab der letzten Woche)
+  // Mitarbeiter nach Aufgabe gruppieren (früherer sinceAbs = länger auf dem
+  // Stuhl = eher der "feste" Stuhlinhaber statt des Springers).
+  const byTask = { Reinigung: [], Kontrolle: [], Regeneinlaeufe: [] };
+  Object.entries(empInfo).forEach(([m, info]) => byTask[info.task].push(m));
+  Object.keys(byTask).forEach(t => byTask[t].sort((a, b) => empInfo[a].sinceAbs - empInfo[b].sinceAbs));
+
+  const chairs = {};
+  const place = (id, m) => { if (m && empInfo[m]) chairs[id] = { employee: m, task: empInfo[m].task, sinceAbs: empInfo[m].sinceAbs }; };
+  place('R1', byTask.Reinigung[0]);
+  place('R2', byTask.Reinigung[1]);
+  place('X1', byTask.Kontrolle[0]);
+  place('X2', byTask.Regeneinlaeufe[0]);
+  place('X3', byTask.Kontrolle[1] || byTask.Regeneinlaeufe[1]);
+
+  // Letzte Ratten-Zuweisung(en) im Vormonat suchen (rückwärts ab der letzten Woche)
   let rattenLast = null;
   for (let i = perWeek.length - 1; i >= 0 && !rattenLast; i--) {
-    const hit = MITARBEITER.find(m => perWeek[i].assign[m] === 'Ratten');
-    if (hit) rattenLast = { abs: perWeek[i].abs, employee: hit };
+    const people = MITARBEITER.filter(m => perWeek[i].assign[m] === 'Ratten');
+    if (people.length) rattenLast = { abs: perWeek[i].abs, employees: people };
   }
 
-  // Für jeden MA mit Aufgabe in der letzten Woche: wie viele Wochen am Stück
-  // (innerhalb des Vormonats) hatte er/sie diese Aufgabe schon durchgehend?
-  const since = {};
-  MITARBEITER.forEach(m => {
-    const t = last.assign[m];
-    if (!t) return;
-    let streak = 1;
-    for (let i = perWeek.length - 2; i >= 0; i--) {
-      if (perWeek[i].assign[m] === t) streak++; else break;
-    }
-    since[m] = { task: t, sinceAbs: last.abs - (streak - 1) };
-  });
-
-  return { since, taskHolders, rattenLast };
+  return { chairs, rattenLast };
 }
 
 function autoGenRotation() {
@@ -1340,126 +1389,133 @@ function autoGenRotation() {
   const { year: prevYear, month: prevMonth } = prevMonthOf(year, month);
   const taskCounts = computeTaskCounts(String(year), prevYear, prevMonth);
 
-  // Der ganze Vormonat wird aus dem Monatsplan ausgelesen (siehe deriveSlotsFromPreviousMonth)
+  // Der ganze Vormonat wird aus dem Monatsplan ausgelesen (siehe deriveStateFromPreviousMonth)
   // und dient als verlässliche Grundlage für die Fortsetzung, unabhängig davon, ob der
-  // interne Rotationsstand noch aktuell ist (z. B. weil zwischenzeitlich von Hand geändert wurde).
-  const prevInfo = deriveSlotsFromPreviousMonth(year, month);
+  // interne Zustand noch aktuell ist (z. B. weil zwischenzeitlich von Hand geändert wurde).
+  const prevInfo = deriveStateFromPreviousMonth(year, month);
 
-  // 6 Slots: je 2 je rotierender Aufgabe.
-  const slotNames = [];
-  ROT_TASKS.forEach(t => slotNames.push(t + '-1', t + '-2'));
-  const order = [...MITARBEITER];
-
-  // Bestehenden Rotationsstand (wer hat welche Aufgabe seit wann) fortsetzen, sofern schon
-  // einmal generiert wurde. Nur beim allerersten Lauf (kein gespeicherter Stand vorhanden)
-  // wird reihum neu verteilt. So verschiebt sich beim Generieren des nächsten Monats nichts
-  // mehr, was eigentlich noch mitten in seinen ~4 Wochen steckt.
-  const haveSlots = slotNames.every(sn => rotSlots[sn] && MITARBEITER.includes(rotSlots[sn].employee));
-  const slots = {};
-  const claimed = new Set(); // verhindert, dass beide Slots derselben Aufgabe denselben MA bekommen
-  slotNames.forEach((sn, i) => {
-    const taskKey = sn.split('-')[0];
-
-    // 1) Bevorzugt: Stand aus dem tatsächlichen Vormonat (Monatsplan) ableiten.
-    if (prevInfo) {
-      let ma = null;
-      if (haveSlots && prevInfo.since[rotSlots[sn].employee]?.task === taskKey) {
-        ma = rotSlots[sn].employee; // bisheriger Slot-Inhaber, durch Monatsplan bestätigt
-      } else {
-        // Wer zeigt laut Monatsplan diese Aufgabe zuletzt, ist aber noch keinem Slot zugeordnet?
-        ma = (prevInfo.taskHolders[taskKey] || []).find(m => !claimed.has(m));
-      }
-      if (ma) {
-        claimed.add(ma);
-        const sinceAbs = prevInfo.since[ma]?.sinceAbs ?? (absWeek(year, start) + i);
-        slots[sn] = { employee: ma, sinceAbs };
-        return;
-      }
-    }
-
-    // 2) Fallback: bisherigen gespeicherten Rotationsstand fortsetzen, oder beim
-    //    allerersten Lauf zeitversetzt reihum starten.
-    if (haveSlots) {
-      const s = rotSlots[sn];
-      slots[sn] = { employee: s.employee, sinceAbs: absWeek(s.sinceYear, s.sinceKW) };
+  // Bestehenden Stühle-Zustand fortsetzen, sofern schon einmal generiert wurde. Nur beim
+  // allerersten Lauf (kein gespeicherter Stand vorhanden) wird reihum neu verteilt, zeitversetzt
+  // gestaffelt, damit nicht alle Mitarbeiter gleichzeitig zum ersten Mal wechseln.
+  const haveChairs = CHAIR_IDS.every(id => chairState[id] && MITARBEITER.includes(chairState[id].employee));
+  const chairs = {};
+  CHAIR_IDS.forEach((id, i) => {
+    if (prevInfo && prevInfo.chairs[id]) {
+      chairs[id] = { ...prevInfo.chairs[id] }; // durch Monatsplan bestätigter Stand hat Vorrang
+    } else if (haveChairs) {
+      chairs[id] = { ...chairState[id] };
     } else {
-      // Zeitversetzter Start: Ohne bereits gespeicherten Rotationsstand würden sonst alle
-      // 6 Slots zum selben Zeitpunkt "seit" gesetzt, wodurch nach dem ersten 4-Wochen-Block
-      // ALLE Mitarbeiter gleichzeitig in derselben Woche wechseln. Slot i gilt hier bereits
-      // i Wochen früher als begonnen, sodass die ersten Wechsel über mehrere Wochen verteilt
-      // eintreten (auch die beiden Kollegen derselben Aufgabe wechseln dann nicht mehr
-      // gleichzeitig). Ab dem zweiten Monat läuft die Staffelung dann organisch über den
-      // gespeicherten rotSlots-Stand weiter.
-      slots[sn] = { employee: order[i % order.length], sinceAbs: absWeek(year, start) + i };
+      chairs[id] = { employee: MITARBEITER[i % MITARBEITER.length], task: chairTaskDefault(id, taskCounts), sinceAbs: absWeek(year, start) - i };
     }
   });
 
-  // Ratten-Turnus ebenso fortsetzen; bevorzugt anhand der letzten Ratten-Zuweisung im
-  // tatsächlichen Vormonat (Monatsplan), sonst über den gespeicherten Turnus, sonst
-  // "Erster Ratten-Dienst" (nur beim allerersten Generieren überhaupt).
-  const haveRatten = rattenState.lastYear !== null;
-  let rattenIdx = haveRatten ? rattenState.idx : (firstC ? 0 : 1);
-  let lastRattenAbs = haveRatten ? absWeek(rattenState.lastYear, rattenState.lastKW) : null;
+  // Ratten-Turnus fortsetzen; bevorzugt anhand der letzten Ratten-Zuweisung im tatsächlichen
+  // Vormonat (Monatsplan), sonst über den gespeicherten Turnus, sonst "Erster Ratten-Dienst"
+  // (nur beim allerersten Generieren überhaupt).
+  const haveRatten = rattenState.lastAbs !== null;
+  let roundCount = haveRatten ? rattenState.roundCount : 0;
+  let soloIdx = haveRatten ? rattenState.soloIdx : (firstC ? 0 : 1);
+  let lastRattenAbs = haveRatten ? rattenState.lastAbs : null;
   if (prevInfo && prevInfo.rattenLast) {
     lastRattenAbs = prevInfo.rattenLast.abs;
-    const idxInCycle = RATTEN_LEUTE.indexOf(prevInfo.rattenLast.employee);
-    if (idxInCycle !== -1) rattenIdx = idxInCycle + 1;
+    if (prevInfo.rattenLast.employees.length < 2) {
+      const idx = RATTEN_LEUTE.indexOf(prevInfo.rattenLast.employees[0]);
+      if (idx !== -1) soloIdx = idx + 1;
+    }
   }
   let nextRattenAbs = lastRattenAbs !== null ? lastRattenAbs + RATTEN_ZYKLUS : absWeek(year, start) + (RATTEN_ZYKLUS - 1);
 
   for (let kw = start; kw <= end; kw++) {
     const curAbs = absWeek(year, kw);
-    const isRattenWeek = curAbs >= nextRattenAbs;
-    let rattenPerson = null;
-    if (isRattenWeek) {
-      rattenPerson = RATTEN_LEUTE[rattenIdx % RATTEN_LEUTE.length];
-      rattenIdx++;
-      lastRattenAbs = curAbs;
-      nextRattenAbs = curAbs + RATTEN_ZYKLUS;
-    }
-
-    // Slot-Rotation: nach ROT_BLOCK_WOCHEN neu besetzen (die neue Person startet
-    // in dieser Woche -> Übergabewoche, in der beide "sichtbar" die Aufgabe tragen)
-    slotNames.forEach(sn => {
-      const slot = slots[sn];
-      if (curAbs - slot.sinceAbs >= ROT_BLOCK_WOCHEN) {
-        const taskKey = sn.split('-')[0];
-        const busy = new Set(slotNames.map(s2 => slots[s2].employee));
-        if (rattenPerson) busy.add(rattenPerson);
-        let cands = MITARBEITER.filter(m => m !== slot.employee && !busy.has(m));
-        if (!cands.length) cands = MITARBEITER.filter(m => m !== slot.employee);
-        cands.sort((a,b) => taskCounts[a][taskKey] - taskCounts[b][taskKey]);
-        slots[sn] = { employee: cands[0] || slot.employee, sinceAbs: curAbs, handoverFrom: slot.employee };
-      }
-    });
-
-    // Wochenzuweisung ableiten
     const assign = {};
     MITARBEITER.forEach(m => assign[m] = { task: 'Frei', note: '' });
 
-    // 1) Neue Slot-Inhaber zuweisen
-    slotNames.forEach(sn => {
-      const slot = slots[sn];
-      const taskKey = sn.split('-')[0];
-      const isHandoverWeek = slot.handoverFrom && slot.sinceAbs === curAbs;
-      assign[slot.employee] = { task: taskKey, note: isHandoverWeek ? ('Übergabe von ' + slot.handoverFrom.split(' ')[0]) : '' };
+    // ── Ratten fällig? ──────────────────────────────────────
+    let rattenPeople = [];
+    if (curAbs >= nextRattenAbs) {
+      roundCount++;
+      const isGrosseRunde = roundCount % RATTEN_GROSSE_RUNDE === 0;
+      if (isGrosseRunde) {
+        // Große Runde: beide zusammen, sofern verfügbar (kein Muss – siehe Vorgabe)
+        rattenPeople = RATTEN_LEUTE.filter(p => !isUrlaubForWeek(p, year, kw) && !isSonstigesForWeek(p, year, kw));
+      } else {
+        const person = RATTEN_LEUTE[soloIdx % RATTEN_LEUTE.length];
+        soloIdx++;
+        if (!isUrlaubForWeek(person, year, kw) && !isSonstigesForWeek(person, year, kw)) rattenPeople = [person];
+      }
+      lastRattenAbs = curAbs;
+      nextRattenAbs = curAbs + RATTEN_ZYKLUS;
+    }
+    rattenPeople.forEach(p => { assign[p] = { task: 'Ratten', note: '' }; });
+
+    // ── Stühle: wer diese Woche auf Ratten ist, pausiert (Regel: Ratten unterbricht
+    //    die laufende Aufgabe, ohne den 4-Wochen-Block abzubrechen – "sinceAbs" wird
+    //    einfach eine Woche nach hinten verschoben, sodass die pausierte Woche nicht
+    //    mitzählt). ──────────────────────────────────────────
+    CHAIR_IDS.forEach(id => {
+      if (rattenPeople.includes(chairs[id].employee)) chairs[id].sinceAbs++;
     });
 
-    // 2) Überschneidung: der bisherige Kollege macht die Aufgabe in der Übergabewoche
-    //    noch eine Woche mit (Einarbeitung), sofern er nicht bereits selbst woanders
-    //    neu eingeteilt wurde (z. B. weil sein eigener Slot zeitgleich wechselt).
-    slotNames.forEach(sn => {
-      const slot = slots[sn];
-      const taskKey = sn.split('-')[0];
-      if (slot.handoverFrom && slot.sinceAbs === curAbs) {
-        const prev = slot.handoverFrom;
-        if (assign[prev].task === 'Frei') {
-          assign[prev] = { task: taskKey, note: 'Übergabe an ' + slot.employee.split(' ')[0] };
+    // ── Stuhlwechsel: nach ROT_BLOCK_WOCHEN aktiven Wochen neu besetzen. Da alle 5
+    //    Mitarbeiter immer auf einem der 5 Stühle sitzen, ist niemand "frei verfügbar" –
+    //    ein Wechsel wird daher als TAUSCH mit einem anderen Stuhl umgesetzt: die Person,
+    //    die den fälligen Stuhl am fairsten übernehmen sollte, wechselt herüber, und die
+    //    bisherige Person dieses Stuhls übernimmt im Gegenzug deren bisherige Aufgabe.
+    //    Mehrere Stühle können in derselben Woche unabhängig voneinander wechseln
+    //    (Regel 4: asynchron/versetzt), jeder Wechsel bringt seine eigene Übergabewoche mit. ──
+    CHAIR_IDS.forEach(id => {
+      const ch = chairs[id];
+      if (rattenPeople.includes(ch.employee)) return; // pausiert diese Woche, kein Wechsel
+      if (curAbs - ch.sinceAbs < ROT_BLOCK_WOCHEN) return; // noch nicht fällig
+
+      const newTask = (id === 'X3') ? pickFloatTask(taskCounts) : ch.task;
+
+      // Tauschpartner: unter den ÜBRIGEN Stühlen (nicht der eigene, nicht gerade auf Ratten
+      // pausiert) denjenigen mit der geringsten bisherigen Belastung auf "newTask" wählen.
+      const partnerIds = CHAIR_IDS.filter(cid => cid !== id && !rattenPeople.includes(chairs[cid].employee));
+      partnerIds.sort((a, b) => taskCounts[chairs[a].employee][newTask] - taskCounts[chairs[b].employee][newTask]);
+      const partnerId = partnerIds[0];
+      if (!partnerId) return; // niemand verfügbar (z. B. alle übrigen gerade auf Ratten) -> Wechsel entfällt diese Woche
+
+      const oldOccupant = ch.employee;
+      const partner = chairs[partnerId];
+      const incomingOccupant = partner.employee;
+      const partnerOldTask = partner.task;
+
+      // Bei Reinigung KEINE Überschneidung: da Regel 2 ("immer genau 2 Personen") strikt gilt,
+      // würde eine Übergabewoche hier kurzzeitig 3 Personen auf Reinigung bedeuten (die zweite,
+      // unbeteiligte Reinigungs-Position läuft ja unverändert weiter). Reinigung wechselt daher
+      // sauber/direkt; die Überschneidung (Regel 4) gilt bei Kontrolle/Regeneinläufe/Springer,
+      // wo keine feste Kopfzahl vorgeschrieben ist.
+      const isReinigungChair = CHAIR_FIXED_TASK[id] === 'Reinigung';
+      chairs[id] = isReinigungChair
+        ? { employee: incomingOccupant, task: newTask, sinceAbs: curAbs }
+        : { employee: incomingOccupant, task: newTask, sinceAbs: curAbs, handoverFrom: oldOccupant, handoverTask: ch.task };
+      // Die bisherige Person übernimmt im Gegenzug die vorherige Aufgabe des Tauschpartners
+      // (kein Leerlauf, niemand steht ohne Aufgabe da).
+      chairs[partnerId] = { employee: oldOccupant, task: partnerOldTask, sinceAbs: curAbs };
+    });
+
+    // ── Wochenzuweisung: aktuelle Stuhl-Inhaber eintragen ──
+    CHAIR_IDS.forEach(id => {
+      const ch = chairs[id];
+      if (rattenPeople.includes(ch.employee)) return; // macht diese Woche Ratten statt Stuhl-Aufgabe
+      const isHandoverWeek = ch.handoverFrom && ch.sinceAbs === curAbs;
+      assign[ch.employee] = { task: ch.task, note: isHandoverWeek ? ('Übergabe von ' + ch.handoverFrom.split(' ')[0]) : '' };
+    });
+
+    // ── Überschneidung: der bisherige Stuhl-Inhaber macht die (alte) Aufgabe in der
+    //    Übergabewoche noch eine Woche mit (Einarbeitung, Regel 4), sofern er nicht
+    //    selbst gerade auf Ratten oder bereits anderweitig eingeteilt ist. ──
+    CHAIR_IDS.forEach(id => {
+      const ch = chairs[id];
+      if (ch.handoverFrom && ch.sinceAbs === curAbs) {
+        const prev = ch.handoverFrom;
+        if (!rattenPeople.includes(prev) && assign[prev].task === 'Frei') {
+          assign[prev] = { task: ch.handoverTask || ch.task, note: 'Übergabe an ' + ch.employee.split(' ')[0] };
         }
       }
     });
-
-    if (rattenPerson) assign[rattenPerson] = { task: 'Ratten', note: '' };
 
     // Bereits von Hand im Monatsplan eingetragene Tätigkeiten als Grundlage übernehmen
     // (überschreibt die algorithmisch ermittelte Zuteilung, sofern für diese Woche
@@ -1475,7 +1531,15 @@ function autoGenRotation() {
     // Sonstige Tätigkeiten/Fortbildungen aus Vorab-Eintragung überschreiben die Aufgabe (fix, hat Vorrang)
     MITARBEITER.forEach(m => { const bez = isSonstigesForWeek(m, year, kw); if (bez) assign[m] = { task: 'Sonstiges', note: bez }; });
 
-    // Mindestbesetzung Reinigung = 2
+    // Kontrolle bevorzugt besetzt halten: fällt Kontrolle in dieser Woche (z. B. durch eine
+    // große Ratten-Runde) komplett aus, während Regeneinläufe noch besetzt ist, rückt eine
+    // Regeneinläufe-Person auf Kontrolle nach (siehe Vorgabe: Kontrolle vor Regeneinläufe).
+    if (MITARBEITER.filter(m => assign[m].task === 'Kontrolle').length === 0) {
+      const cand = MITARBEITER.find(m => assign[m].task === 'Regeneinlaeufe');
+      if (cand) assign[cand] = { task: 'Kontrolle', note: 'Vertretung' };
+    }
+
+    // Mindestbesetzung Reinigung = 2 (Regel 2, absolute Pflicht)
     let cnt = MITARBEITER.filter(m => assign[m].task === 'Reinigung').length;
     if (cnt < 2) {
       const pool = MITARBEITER.filter(m => ['Kontrolle','Regeneinlaeufe'].includes(assign[m].task))
@@ -1492,16 +1556,9 @@ function autoGenRotation() {
     rotData[wk] = { employees, note: existingNote };
   }
 
-  // Rotationsstand für die nächste Generierung (nächster Monat) persistieren.
-  slotNames.forEach(sn => {
-    const s = slots[sn];
-    const { year: sy, kw: sk } = absToYearKW(s.sinceAbs);
-    rotSlots[sn] = { employee: s.employee, sinceYear: sy, sinceKW: sk };
-  });
-  if (lastRattenAbs !== null) {
-    const { year: ry, kw: rk } = absToYearKW(lastRattenAbs);
-    rattenState = { idx: rattenIdx, lastYear: ry, lastKW: rk };
-  }
+  // Zustand für die nächste Generierung (nächster Monat) persistieren.
+  CHAIR_IDS.forEach(id => { chairState[id] = { employee: chairs[id].employee, task: chairs[id].task, sinceAbs: chairs[id].sinceAbs }; });
+  if (lastRattenAbs !== null) rattenState = { roundCount, lastAbs: lastRattenAbs, soloIdx };
 
   renderRotation();
   renderFairness();
@@ -1564,6 +1621,10 @@ function clearRotation() {
   if (!confirm('Rotationsplan für dieses Jahr zurücksetzen? Alle manuellen Änderungen gehen verloren.')) return;
   const year = parseInt(document.getElementById('genYear').value);
   for (let kw = 1; kw <= 52; kw++) delete rotData[weekKey(year, kw)];
+  // Auch den internen Fortsetzungs-Zustand zurücksetzen, damit die nächste Generierung
+  // wirklich neu (zeitversetzt reihum) startet, statt einen alten Stand fortzuführen.
+  chairState = {};
+  rattenState = { roundCount: 0, lastAbs: null, soloIdx: 0 };
   renderRotation();
   renderFairness();
   scheduleRotSave();
