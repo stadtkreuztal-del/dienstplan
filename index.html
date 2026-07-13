@@ -967,7 +967,7 @@ function getMonatsplanBasisForWeek(ma, year, kw) {
     const ds = dateStr(d.getFullYear(), d.getMonth(), d.getDate());
     const entry = data[ds]?.entries?.[ma];
     const kat = entry?.kat;
-    if (kat && KAT_TO_TASK[kat]) {
+    if (kat && KAT_TO_TASK[kat] && kat !== 'Fr') {
       counts[kat] = (counts[kat] || 0) + 1;
       if (entry.text) notes[kat] = entry.text;
     }
@@ -1409,6 +1409,27 @@ function autoGenRotation() {
     }
   });
 
+  // ── Sicherheitsnetz: sicherstellen, dass wirklich jeder Mitarbeiter genau einem
+  //    Stuhl zugeordnet ist (Regel: Auto-Generierung darf niemals "Frei" ausgeben).
+  //    Ohne dies könnte z. B. jemand, der den kompletten Vormonat durchgehend im
+  //    Urlaub/Sonstiges war, aus der Vormonats-Ableitung herausfallen und dadurch
+  //    keinem Stuhl mehr zugeordnet sein – er würde dann unbemerkt "Frei" bleiben. ──
+  {
+    const seenEmployees = new Set();
+    const openChairIds = [];
+    CHAIR_IDS.forEach(id => {
+      const emp = chairs[id]?.employee;
+      if (!emp || !MITARBEITER.includes(emp) || seenEmployees.has(emp)) openChairIds.push(id);
+      else seenEmployees.add(emp);
+    });
+    const unseated = MITARBEITER.filter(m => !seenEmployees.has(m));
+    unseated.forEach((m, i) => {
+      const id = openChairIds[i];
+      if (!id) return; // kann bei 5 Mitarbeitern/5 Stühlen nicht vorkommen
+      chairs[id] = { employee: m, task: chairTaskDefault(id, taskCounts), sinceAbs: absWeek(year, start) };
+    });
+  }
+
   // Ratten-Turnus fortsetzen; bevorzugt anhand der letzten Ratten-Zuweisung im tatsächlichen
   // Vormonat (Monatsplan), sonst über den gespeicherten Turnus, sonst "Erster Ratten-Dienst"
   // (nur beim allerersten Generieren überhaupt).
@@ -1470,12 +1491,19 @@ function autoGenRotation() {
 
       const newTask = (id === 'X3') ? pickFloatTask(taskCounts) : ch.task;
 
-      // Tauschpartner: unter den ÜBRIGEN Stühlen (nicht der eigene, nicht gerade auf Ratten
-      // pausiert) denjenigen mit der geringsten bisherigen Belastung auf "newTask" wählen.
-      const partnerIds = CHAIR_IDS.filter(cid => cid !== id && !rattenPeople.includes(chairs[cid].employee));
+      // Tauschpartner: NUR unter den Stühlen wählen, die selbst ebenfalls schon fällig sind
+      // (mind. ROT_BLOCK_WOCHEN aktive Wochen erreicht haben). Sonst würde der 4-Wochen-Block
+      // einer fremden, eigentlich noch nicht fälligen Person vorzeitig abgebrochen – das
+      // widerspricht der Regel "4-Wochen-Blöcke einhalten". Unter den fälligen Partnern
+      // zählt weiterhin die geringste bisherige Belastung auf "newTask" (Fairness).
+      const partnerIds = CHAIR_IDS.filter(cid =>
+        cid !== id &&
+        !rattenPeople.includes(chairs[cid].employee) &&
+        curAbs - chairs[cid].sinceAbs >= ROT_BLOCK_WOCHEN
+      );
       partnerIds.sort((a, b) => taskCounts[chairs[a].employee][newTask] - taskCounts[chairs[b].employee][newTask]);
       const partnerId = partnerIds[0];
-      if (!partnerId) return; // niemand verfügbar (z. B. alle übrigen gerade auf Ratten) -> Wechsel entfällt diese Woche
+      if (!partnerId) return; // aktuell kein ebenfalls fälliger Partner -> Wechsel wird verschoben (Block läuft länger, statt fremden Block zu verkürzen)
 
       const oldOccupant = ch.employee;
       const partner = chairs[partnerId];
@@ -1531,13 +1559,24 @@ function autoGenRotation() {
     // Sonstige Tätigkeiten/Fortbildungen aus Vorab-Eintragung überschreiben die Aufgabe (fix, hat Vorrang)
     MITARBEITER.forEach(m => { const bez = isSonstigesForWeek(m, year, kw); if (bez) assign[m] = { task: 'Sonstiges', note: bez }; });
 
-    // Kontrolle bevorzugt besetzt halten: fällt Kontrolle in dieser Woche (z. B. durch eine
-    // große Ratten-Runde) komplett aus, während Regeneinläufe noch besetzt ist, rückt eine
-    // Regeneinläufe-Person auf Kontrolle nach (siehe Vorgabe: Kontrolle vor Regeneinläufe).
-    if (MITARBEITER.filter(m => assign[m].task === 'Kontrolle').length === 0) {
-      const cand = MITARBEITER.find(m => assign[m].task === 'Regeneinlaeufe');
-      if (cand) assign[cand] = { task: 'Kontrolle', note: 'Vertretung' };
+    // ── Engpass-Regel: Kontrolle und Regeneinläufe dürfen nie komplett ausfallen ──
+    // Fällt eine der beiden Aufgaben in dieser Woche komplett aus (z. B. durch Urlaub
+    // oder eine große Ratten-Runde), rückt ausnahmsweise jemand von der jeweils anderen
+    // Aufgabe (oder, falls dort niemand verfügbar ist, von einem Reinigungs-Überschuss)
+    // nach. Das unterbricht/verkürzt den eigentlichen 4-Wochen-Block dieser Person für
+    // diese eine Woche – laut Vorgabe ausdrücklich als Engpass-Ausnahme zulässig, während
+    // die Blöcke ansonsten strikt eingehalten werden.
+    function engpassNachruecken(task, alternativTask) {
+      if (MITARBEITER.some(m => assign[m].task === task)) return;
+      let cand = MITARBEITER.find(m => assign[m].task === alternativTask);
+      if (!cand) {
+        const reinigungLeute = MITARBEITER.filter(m => assign[m].task === 'Reinigung');
+        if (reinigungLeute.length > 2) cand = reinigungLeute[0]; // Reinigungs-Mindestbesetzung bleibt gewahrt
+      }
+      if (cand) assign[cand] = { task, note: 'Vertretung (Engpass)' };
     }
+    engpassNachruecken('Kontrolle', 'Regeneinlaeufe');
+    engpassNachruecken('Regeneinlaeufe', 'Kontrolle');
 
     // Mindestbesetzung Reinigung = 2 (Regel 2, absolute Pflicht)
     let cnt = MITARBEITER.filter(m => assign[m].task === 'Reinigung').length;
@@ -1546,6 +1585,20 @@ function autoGenRotation() {
         .sort((a,b) => taskCounts[a].Reinigung - taskCounts[b].Reinigung);
       while (cnt < 2 && pool.length) { const c = pool.shift(); assign[c] = { task: 'Reinigung', note: 'Vertretung' }; cnt++; }
     }
+
+    // ── Letztes Sicherheitsnetz: Auto-Generierung darf NIEMALS "Frei" ausgeben ──
+    // Sollte trotz aller obigen Regeln (unerwarteterweise) noch jemand auf "Frei"
+    // stehen, wird er der aktuell am geringsten besetzten Pflichtaufgabe zugeteilt,
+    // statt unbeaufsichtigt als "Frei" im Plan zu landen.
+    MITARBEITER.forEach(m => {
+      if (assign[m].task !== 'Frei') return;
+      const kandidaten = ['Kontrolle', 'Regeneinlaeufe', 'Reinigung'];
+      kandidaten.sort((a, b) =>
+        MITARBEITER.filter(x => assign[x].task === a).length -
+        MITARBEITER.filter(x => assign[x].task === b).length
+      );
+      assign[m] = { task: kandidaten[0], note: 'Vertretung (Engpass)' };
+    });
 
     // Zähler fortschreiben (für Fairness der restlichen Generierung in diesem Lauf)
     MITARBEITER.forEach(m => { const t = assign[m].task; if (taskCounts[m][t] !== undefined) taskCounts[m][t]++; });
