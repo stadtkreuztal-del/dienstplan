@@ -80,6 +80,12 @@ tr.is-holiday td.td-date { color: var(--blue-light); }
 .notiz-input { width: 100%; padding: 4px 6px; border: 1px solid #1e4a6b; border-radius: 4px; font-size: 12px; background: #101820; color: var(--text); }
 .notiz-input:focus { outline: none; border-color: #3b82b8; }
 
+/* Kommentarfelder unter den Tätigkeiten: rein händisch, bleiben leer, wachsen bei Bedarf */
+.komm-list { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
+.komm-input { width: 100%; padding: 3px 5px; border: 1px dashed var(--border); border-radius: 4px; font-size: 11px; background: transparent; color: var(--muted); }
+.komm-input:focus { outline: none; border-color: var(--blue-light); border-style: solid; color: var(--text); background: var(--bg); }
+.komm-input:not(:placeholder-shown) { border-style: solid; color: var(--text); }
+
 /* Weekend cells: no input visible on non-work days */
 tr.is-weekend .cell-input, tr.is-weekend .kat-sel { opacity: 0.35; }
 
@@ -126,8 +132,9 @@ tr.is-weekend .cell-input, tr.is-weekend .kat-sel { opacity: 0.35; }
   .grid-table td { padding: 1px 2px; border: 1px solid #ccc; }
   .td-date, .td-day, .td-kw { color: #000 !important; }
   .td-kw-label { color: #000 !important; background: #eee !important; }
-  .cell-input, .notiz-input { background: transparent !important; color: #000 !important; border: none !important; font-size: 7.5px; padding: 0; }
+  .cell-input, .notiz-input, .komm-input { background: transparent !important; color: #000 !important; border: none !important; font-size: 7.5px; padding: 0; }
   .kat-sel { border: none !important; font-size: 7px; padding: 0; }
+  .komm-input:placeholder-shown { display: none !important; } /* leere Kommentarfelder nicht mitdrucken */
 
   /* Erste 3 Spalten (Datum, Tag, KW) schmaler */
   .grid-table th.th-date, .grid-table td.td-date { width: 42px; max-width: 42px; min-width: 0; padding-left: 3px; }
@@ -190,6 +197,22 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
 .ber-flag { display:inline-block; font-size:9px; font-weight:700; border-radius:3px; padding:1px 5px; margin-top:3px; margin-right:3px; }
 .ber-Ruf    { background:#9b59b6; color:#fff; }
 .ber-Winter { background:#5dade2; color:#0a1e2b; }
+
+/* Aufklappbare Tagesansicht je Woche (einzelne freie Tage / Fortbildungen) */
+.kw-cell, .dates-cell { cursor: pointer; user-select: none; }
+.wk-toggle { display: inline-block; width: 12px; color: var(--blue-light); font-weight: 700; }
+tr.rot-days-row td { background: #0d1016; padding: 8px 10px 10px 10px; border-bottom: 2px solid #252e3e; }
+.rot-day-table { border-collapse: collapse; width: 100%; max-width: 720px; }
+.rot-day-table td { padding: 3px 6px; font-size: 11px; border: none; vertical-align: middle; }
+.rot-day-table .rot-day-head { color: var(--muted); font-weight: 700; text-align: center; }
+.rot-day-label { color: var(--text); font-weight: 700; white-space: nowrap; }
+.rot-day-cell { text-align: center; cursor: pointer; user-select: none; }
+.rot-day-cell:hover { filter: brightness(1.25); }
+.day-badge { display: inline-block; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700; min-width: 60px; }
+.day-badge.day-empty { background: transparent; color: var(--muted); border: 1px dashed var(--border); font-weight: 400; }
+.day-badge.day-auto { border: 1px dashed rgba(0,0,0,0.45); }
+.day-badge i { font-style: normal; font-weight: 600; opacity: 0.85; }
+.rot-day-hint { font-size: 10px; color: var(--muted); margin-top: 6px; }
 
 /* Bereitschaft manuell umschaltbar im Monatsplan */
 .ber-toggle { display:flex; gap:3px; margin-top:3px; }
@@ -675,6 +698,44 @@ function applyKatStyle(sel, kat) {
   }
 }
 
+// ─── Kommentarfelder (frei/händisch, unter den Tätigkeiten) ──
+/* Rendert die vorhandenen Kommentare + immer ein zusätzliches leeres Feld
+   am Ende zum Eintragen eines neuen Kommentars. Es wird NICHTS automatisch
+   befüllt (auch nicht beim Generieren/Übertragen aus dem Rotationsplan). */
+function renderComments(ds, ma, comments) {
+  const list = Array.isArray(comments) ? comments : [];
+  const rows = [...list, '']; // immer ein leeres Feld am Ende
+  return `<div class="komm-list" data-date="${ds}" data-ma="${ma}">
+    ${rows.map((c, i) => `<input type="text" class="komm-input" data-date="${ds}" data-ma="${ma}" data-idx="${i}"
+      value="${(c || '').replace(/"/g, '&quot;')}" placeholder="Kommentar…" oninput="onCommentInput(this)">`).join('')}
+  </div>`;
+}
+
+function onCommentInput(el) {
+  const { date, ma } = el.dataset;
+  const idx = parseInt(el.dataset.idx, 10);
+  const entry = maEntry(date, ma);
+  if (!Array.isArray(entry.comments)) entry.comments = [];
+  entry.comments[idx] = el.value;
+  scheduleSave();
+
+  // Wurde das bislang letzte (leere) Feld befüllt, direkt darunter ein neues
+  // leeres Kommentarfeld anlegen, ohne die ganze Zelle neu zu rendern.
+  const container = el.closest('.komm-list');
+  if (!container) return;
+  const inputs = container.querySelectorAll('.komm-input');
+  const isLast = idx === inputs.length - 1;
+  if (isLast && el.value.trim() !== '') {
+    const next = document.createElement('input');
+    next.type = 'text';
+    next.className = 'komm-input';
+    next.dataset.date = date; next.dataset.ma = ma; next.dataset.idx = String(inputs.length);
+    next.placeholder = 'Kommentar…';
+    next.addEventListener('input', () => onCommentInput(next));
+    container.appendChild(next);
+  }
+}
+
 // ─── Grid rendering ────────────────────────────────────────
 function renderGrid() {
   const y = currentYear, m = currentMonth;
@@ -734,6 +795,7 @@ function renderGrid() {
             placeholder="${isWeekend && !feiertag ? '' : 'Eintrag…'}"
             oninput="onTextChange(this)">
           ${renderBerToggle(ds, ma, entry)}
+          ${renderComments(ds, ma, entry.comments)}
         </div>
       </td>`;
     });
@@ -1283,6 +1345,82 @@ function refreshReinigungHint(wk) {
   if (el) el.textContent = cnt < 2 ? `⚠ nur ${cnt}` : '';
 }
 
+// ─── Tagesgenaue Ansicht je Woche (einzelne freie Tage / Fortbildungen) ──
+/* Merkt sich, welche Wochen im Rotationsplan gerade aufgeklappt sind
+   (nur UI-Zustand, wird nicht gespeichert). */
+let expandedWeeks = new Set();
+
+/* Ermittelt den für einen einzelnen Tag geltenden Status eines Mitarbeiters:
+   1) eine manuell gesetzte Tages-Ausnahme (rotData[wk].dayOverride)
+   2) ein bereits eingetragener Urlaub/Frei-Zeitraum für genau diesen Tag
+   3) ein bereits eingetragener "Sonstiges/Fortbildung"-Zeitraum für genau diesen Tag
+   Gibt null zurück, wenn für den Tag keine Ausnahme vorliegt (dann gilt die
+   normale Wochenaufgabe). So werden auch einzelne Tage berücksichtigt, die für
+   die 3-von-5-Regel der Wochenansicht sonst zu kurz wären. */
+function getDayTask(ma, ds, wk) {
+  const rd = rotData[wk];
+  const manual = rd?.dayOverride?.[ma]?.[ds];
+  if (manual) return { task: manual, note: '', auto: false };
+  const url = urlaubData.find(u => u.ma === ma && ds >= u.von && ds <= u.bis);
+  if (url) return { task: url.art === 'Frei' ? 'Frei' : 'Urlaub', note: '', auto: true };
+  const son = sonstigesData.find(u => u.ma === ma && ds >= u.von && ds <= u.bis);
+  if (son) return { task: 'Sonstiges', note: son.bez || '', auto: true };
+  return null;
+}
+
+function renderDayBadge(info) {
+  if (!info) return `<span class="day-badge day-empty">– folgt Woche</span>`;
+  const cls = 'day-badge' + (info.auto ? ' day-auto' : '') + ` st-${info.task}`;
+  return `<span class="${cls}">${TASK_LABEL[info.task] || info.task}${info.note ? ` <i>(${info.note})</i>` : ''}</span>`;
+}
+
+function buildDayTable(wk, year, kw) {
+  const start = getWeekStart(year, kw);
+  const tageKurz = ['Mo', 'Di', 'Mi', 'Do', 'Fr'];
+  let head = `<tr><td></td>${MITARBEITER.map((ma, i) => `<td class="rot-day-head">${MA_SHORT[i]}</td>`).join('')}</tr>`;
+  let rows = '';
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    const ds = dateStr(d.getFullYear(), d.getMonth(), d.getDate());
+    const lbl = `${tageKurz[i]} ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
+    rows += `<tr>
+      <td class="rot-day-label">${lbl}</td>
+      ${MITARBEITER.map(ma => {
+        const info = getDayTask(ma, ds, wk);
+        return `<td class="rot-day-cell" data-wkey="${wk}" data-ma="${ma}" data-date="${ds}" onclick="cycleDayOverride('${wk}','${ma}','${ds}')">${renderDayBadge(info)}</td>`;
+      }).join('')}
+    </tr>`;
+  }
+  return `<table class="rot-day-table">${head}${rows}</table>
+    <div class="rot-day-hint">Gestrichelt = automatisch aus Urlaub/Sonstiges übernommen. Klick auf einen Tag = manuell überschreiben (Frei, Urlaub, Sonstiges, Reinigung, Kontrolle, Regeneinläufe${true ? ', Ratten (nur Christian/Thorsten)' : ''}). Nochmal klicken bis „– folgt Woche" = Ausnahme wieder entfernen.</div>`;
+}
+
+function toggleWeekDays(wk) {
+  if (expandedWeeks.has(wk)) expandedWeeks.delete(wk); else expandedWeeks.add(wk);
+  const row = document.querySelector(`tr.rot-days-row[data-wkey="${wk}"]`);
+  const arrow = document.querySelector(`.wk-toggle[data-wkey="${wk}"]`);
+  if (row) row.style.display = expandedWeeks.has(wk) ? 'table-row' : 'none';
+  if (arrow) arrow.textContent = expandedWeeks.has(wk) ? '▾' : '▸';
+}
+
+function cycleDayOverride(wk, ma, ds) {
+  if (!rotData[wk]) rotData[wk] = { employees: {}, note: '' };
+  if (!rotData[wk].dayOverride) rotData[wk].dayOverride = {};
+  if (!rotData[wk].dayOverride[ma]) rotData[wk].dayOverride[ma] = {};
+  const isRT = RATTEN_LEUTE.includes(ma);
+  const cycle = isRT
+    ? ['', 'Frei', 'Urlaub', 'Sonstiges', 'Reinigung', 'Kontrolle', 'Regeneinlaeufe', 'Ratten']
+    : ['', 'Frei', 'Urlaub', 'Sonstiges', 'Reinigung', 'Kontrolle', 'Regeneinlaeufe'];
+  const cur = rotData[wk].dayOverride[ma][ds] || '';
+  const nxt = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
+  if (nxt === '') delete rotData[wk].dayOverride[ma][ds];
+  else rotData[wk].dayOverride[ma][ds] = nxt;
+
+  const cell = document.querySelector(`.rot-day-cell[data-wkey="${wk}"][data-ma="${ma}"][data-date="${ds}"]`);
+  if (cell) cell.innerHTML = renderDayBadge(getDayTask(ma, ds, wk));
+  scheduleRotSave();
+}
+
 // ─── Automatische Generierung ─────────────────────────────────
 /* Ermittelt für jeden Mitarbeiter die bisherige Wochenanzahl je Aufgabe aus
    ALLEN bereits gespeicherten Jahren/Wochen (Fairness über die Zeit hinweg). */
@@ -1661,7 +1799,10 @@ function transferMonthToPlan() {
 
     const dayEntry = entryData(ds);
     MITARBEITER.forEach(ma => {
-      const a = rd.employees[ma];
+      // Tagesgenaue Ausnahme (einzelner freier Tag, Urlaub oder Fortbildung/Sonstiges)
+      // hat Vorrang vor der für die ganze Woche generierten Aufgabe.
+      const dayInfo = getDayTask(ma, ds, wk);
+      const a = dayInfo || rd.employees[ma];
       if (!a) return;
       const kat = TASK_TO_KAT[a.task] || '';
       let text = TASK_LABEL[a.task] || a.task;
@@ -1732,8 +1873,8 @@ function renderRotation() {
     const rowCls = ['rot-week', isRattenRow ? 'rot-ratten' : ''].filter(Boolean).join(' ');
 
     html += `<tr class="${rowCls}" data-wkey="${wk}">
-      <td class="kw-cell">KW ${kw}</td>
-      <td class="dates-cell">${fmtWeekRange(year, kw)}</td>
+      <td class="kw-cell" onclick="toggleWeekDays('${wk}')"><span class="wk-toggle" data-wkey="${wk}">${expandedWeeks.has(wk) ? '▾' : '▸'}</span> KW ${kw}</td>
+      <td class="dates-cell" onclick="toggleWeekDays('${wk}')">${fmtWeekRange(year, kw)}</td>
       ${MITARBEITER.map(ma => {
         const a = rd.employees?.[ma] || { task:'Frei', note:'' };
         const ber = getBereitschaftForWeek(ma, year, kw);
@@ -1743,6 +1884,9 @@ function renderRotation() {
       <td><input class="notiz-input" style="font-size:11px;padding:3px 5px;" data-wkey="${wk}"
         value="${(rd.note||'').replace(/"/g,'&quot;')}" placeholder="Notiz…"
         oninput="onRotNotiz(this)"></td>
+    </tr>
+    <tr class="rot-days-row" data-wkey="${wk}" style="display:${expandedWeeks.has(wk) ? 'table-row' : 'none'}">
+      <td colspan="${totalCols}">${buildDayTable(wk, year, kw)}</td>
     </tr>`;
   }
 
