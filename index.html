@@ -107,11 +107,75 @@ tr.is-weekend .cell-input, tr.is-weekend .kat-sel { opacity: 0.35; }
 .empty-state { text-align: center; padding: 36px; color: var(--muted); font-size: 14px; }
 .tbl-scroll { overflow-x: auto; }
 
+/* ─── Responsive: Tablet & Smartphone (≤ 768px) ────────────── */
 @media (max-width: 768px) {
+  html { -webkit-text-size-adjust: 100%; }
+  body { overflow-x: hidden; }
+
+  header { padding: 0 12px; height: auto; min-height: 56px; flex-wrap: wrap; }
+  .header-left { gap: 10px; }
+  .logo { width: 32px; height: 32px; font-size: 15px; flex-shrink: 0; }
+  header h1 { font-size: 14px; line-height: 1.3; }
+  header .subtitle { font-size: 10px; }
+  #syncStatus { font-size: 10px; white-space: nowrap; }
+
+  /* Navigation: horizontal scrollbar statt Umbruch, damit Tabs nicht "springen" */
+  nav { padding: 0 8px; gap: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
+  nav button { padding: 10px 12px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+
   main { padding: 10px; }
-  header h1 { font-size: 15px; }
-  nav button { padding: 8px 10px; font-size: 12px; }
+  .card { padding: 12px; border-radius: 6px; }
+  .card h2 { font-size: 14px; }
+
+  /* Alle Toolbars/Formularreihen: Elemente untereinander, volle Breite, größere Touch-Ziele */
+  .month-nav, .gen-bar, .urlaub-form, .filter-row, .legend-bar { padding: 10px 12px; gap: 8px; }
+  .month-nav { justify-content: flex-start; }
+  .month-nav h2 { min-width: 0; width: 100%; text-align: left; font-size: 15px; order: -1; }
+  .month-nav #syncStatus2 { margin-left: 0; }
+  .btn, .btn-primary, .btn-ghost, .btn-green { min-height: 38px; padding: 8px 14px; }
+
+  .urlaub-form .fld { flex: 1 1 140px; }
+  .urlaub-form input[style*="min-width"] { min-width: 0 !important; }
+  .urlaub-form select, .urlaub-form input,
+  .gen-bar select, .gen-bar input,
+  .filter-row select { font-size: 16px; padding: 8px 10px; } /* ≥16px verhindert Auto-Zoom auf iOS */
+
+  /* Tabellen: horizontales Scrollen bleibt, aber weniger vertikale Höhe reservieren */
+  .grid-wrap { max-height: 62vh; }
+  .grid-table th, .rot-table th { font-size: 11px; padding: 7px 5px; }
   .grid-table th.th-ma { min-width: 130px; }
+  .grid-table th.th-notiz { min-width: 130px; }
+  .cell-input, .notiz-input, .komm-input, .kat-sel { font-size: 13px; }
+
+  .legend-bar { gap: 6px; }
+  .leg-item { font-size: 11px; }
+
+  .auth-box { width: 90vw; max-width: 320px; padding: 26px 22px; }
+  .auth-box input { font-size: 16px; }
+}
+
+/* ─── Responsive: kleine Smartphones (≤ 480px) ──────────────── */
+@media (max-width: 480px) {
+  header { padding: 0 10px; }
+  header h1 { font-size: 13px; }
+  header .subtitle { display: none; } /* Platz sparen, Titel bleibt lesbar */
+  .logo { width: 28px; height: 28px; font-size: 13px; }
+
+  nav button { padding: 9px 10px; font-size: 11px; }
+
+  main { padding: 6px; }
+  .card { padding: 10px; margin-bottom: 12px; }
+
+  .month-nav .no-print[style*="margin-left:10px"] { display: none; } /* Zoom-Regler auf sehr kleinen Screens ausblenden */
+  #syncStatus2 { display: none; }
+
+  .grid-wrap { max-height: 58vh; }
+  .grid-table th.th-date, .grid-table td.td-date { min-width: 58px; }
+  .grid-table th.th-ma { min-width: 110px; }
+  .grid-table th.th-notiz { min-width: 110px; }
+
+  .urlaub-form .fld { flex: 1 1 100%; }
+  .urlaub-form input[type="text"] { min-width: 0 !important; width: 100%; }
 }
 
 /* ─── Drucken (Monatsplan auf einer Seite) ─────────────────── */
