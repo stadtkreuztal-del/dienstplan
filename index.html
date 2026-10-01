@@ -220,6 +220,53 @@ tr.is-weekend .cell-input, tr.is-weekend .kat-sel { opacity: 0.35; }
   @page { size: A4 landscape; margin: 6mm; }
 }
 
+/* ─── Monatsübersicht (ganzer Monat auf einen Blick) ────────── */
+.view-toggle { display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+.view-toggle button { background:var(--border); color:var(--muted); border:none; padding:8px 12px; font-size:12px; font-weight:700; cursor:pointer; }
+.view-toggle button:hover { color:var(--text); }
+.view-toggle button.active { background:var(--blue-light); color:#fff; }
+.zoom-hidden { display:none !important; }
+
+.mp-wrap { overflow-x:auto; border-radius:6px; }
+.mp-table { border-collapse:separate; border-spacing:0; width:100%; min-width:1150px; table-layout:fixed; }
+.mp-table th, .mp-table td { border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
+.mp-table th.mp-name { position:sticky; left:0; z-index:3; width:92px; min-width:92px; background:#222a37; color:var(--text); font-size:12px; font-weight:700; text-align:left; padding:6px 8px; }
+.mp-table th.mp-corner { background:var(--blue); color:#fff; z-index:4; vertical-align:middle; }
+.mp-table th.mp-kw { background:#a35608; color:#fff; font-size:10px; font-weight:700; padding:2px 5px; text-align:left; white-space:nowrap; overflow:hidden; }
+.mp-table th.mp-th { background:#2a3342; color:var(--text); text-align:center; padding:3px 0; line-height:1.15; font-weight:400; }
+.mp-dow { display:block; font-size:9px; color:var(--muted); }
+.mp-dnum { display:block; font-size:13px; font-weight:700; }
+.mp-table th.mp-th.mp-we { background:#181c24; }
+.mp-table th.mp-th.mp-ft { background:var(--holiday-bg); color:var(--blue-light); }
+.mp-table th.mp-th.mp-today { box-shadow: inset 0 -3px 0 var(--green); }
+.mp-cell { height:62px; padding:3px 2px; vertical-align:top; text-align:center; cursor:pointer; overflow:hidden; background:var(--white); color:var(--muted); }
+.mp-cell.mp-we { background:var(--weekend-bg); }
+.mp-cell.mp-ft { background:var(--holiday-bg); }
+.mp-cell.mp-today { box-shadow: inset 2px 0 0 var(--green), inset -2px 0 0 var(--green); }
+.mp-cell:hover { outline:2px solid var(--blue-light); outline-offset:-2px; filter:brightness(1.15); }
+.mp-code { font-size:11px; font-weight:800; line-height:1.15; }
+.mp-txt { font-size:9px; font-weight:600; line-height:1.15; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.mp-ber { font-size:9px; line-height:1.2; }
+.mp-note-row .mp-cell { height:auto; min-height:26px; }
+.mp-note-row .mp-txt { color:var(--text); font-weight:400; -webkit-line-clamp:2; }
+tr.row-flash td { box-shadow: inset 0 0 0 9999px rgba(224,122,28,0.28); }
+
+@media print {
+  .mp-wrap { overflow:visible; }
+  .mp-table { min-width:0; width:100%; }
+  .mp-table th, .mp-table td { border:1px solid #999; }
+  .mp-table th.mp-name, .mp-table th.mp-corner { position:static; width:60px; min-width:0; background:#444; color:#fff; font-size:9px; padding:2px 3px; }
+  .mp-table th.mp-kw { background:#ddd; color:#000; }
+  .mp-table th.mp-th, .mp-table th.mp-th.mp-we, .mp-table th.mp-th.mp-ft { background:#eee; color:#000; }
+  .mp-table th.mp-th.mp-ft { background:#fdf3d9; }
+  .mp-dow { color:#333; }
+  .mp-cell { background:#fff; color:#000; height:52px; box-shadow:none !important; }
+  .mp-cell.mp-we { background:#f0f0f0; }
+  .mp-cell.mp-ft { background:#fdf3d9; }
+  .mp-txt { font-size:7.5px; }
+  .mp-note-row .mp-txt { color:#000; }
+}
+
 /* ─── Rotationsplan ──────────────────────────────────────── */
 .gen-bar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--white); padding:12px 18px; border-radius:8px; border:1px solid var(--border); margin-bottom:14px; }
 .gen-bar label { font-size:12px; font-weight:700; color:var(--blue); }
@@ -345,8 +392,12 @@ tr.rot-days-row td { background: #0d1016; padding: 8px 10px 10px 10px; border-bo
     <button class="btn btn-ghost no-print" onclick="changeMonth(-1)">◀ Vormonat</button>
     <h2 id="monthTitle">—</h2>
     <button class="btn btn-ghost no-print" onclick="changeMonth(+1)">Nächster ▶</button>
+    <div class="view-toggle no-print">
+      <button type="button" id="viewBtnOv" class="active" onclick="setPlanView('overview')">🗓 Monatsübersicht</button>
+      <button type="button" id="viewBtnEdit" onclick="setPlanView('edit')">✏️ Bearbeiten</button>
+    </div>
     <button class="btn btn-primary no-print" onclick="window.print()">🖨 Drucken</button>
-    <div class="no-print" style="display:flex;align-items:center;gap:6px;margin-left:10px;">
+    <div id="zoomWrap" class="no-print" style="display:flex;align-items:center;gap:6px;margin-left:10px;">
       <label style="font-size:11px;color:var(--muted);">🔍 Größe:</label>
       <input type="range" id="gridZoom" min="50" max="150" step="5" value="100" oninput="setGridZoom(this.value)" style="width:110px;">
       <span id="gridZoomVal" style="font-size:11px;color:var(--muted);min-width:34px;">100%</span>
@@ -369,6 +420,15 @@ tr.rot-days-row td { background: #0d1016; padding: 8px 10px 10px 10px; border-bo
     <div class="leg-item"><span class="ber-flag ber-Winter">❄ Winter</span>Winterdienst (Klick auf ❄-Button in der Zelle zum Umschalten)</div>
   </div>
 
+  <!-- Kompakte Ansicht: ganzer Monat auf einen Blick (Klick auf Tag = zum Bearbeiten springen) -->
+  <div id="overviewView">
+    <div class="card" style="padding: 12px;">
+      <div class="mp-wrap"><table class="mp-table" id="mpTable"></table></div>
+      <div class="no-print" style="font-size:11px;color:var(--muted);margin-top:8px;">Klick auf ein Feld öffnet den Tag in der Bearbeitungsansicht. Mauszeiger über ein Feld zeigt den vollständigen Eintrag.</div>
+    </div>
+  </div>
+
+  <div id="editView" style="display:none;">
   <div class="card" style="padding: 12px;">
     <div class="grid-wrap">
       <table class="grid-table" id="gridTable">
@@ -377,6 +437,7 @@ tr.rot-days-row td { background: #0d1016; padding: 8px 10px 10px 10px; border-bo
       </table>
     </div>
   </div>
+  </div><!-- /#editView -->
 </div>
 
 <!-- ===== ROTATIONSPLAN ===== -->
@@ -699,6 +760,7 @@ async function showSection(s, btn) {
   document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
   document.getElementById('sec-'+s).classList.add('active');
   btn.classList.add('active');
+  if (s === 'plan') renderMonthOverview();
   if (s === 'uebersicht') { populateOvFilters(); renderOverview(); }
   if (s === 'rotation') {
     await Promise.all([loadRotData(), loadUrlaub(), loadSonstiges(), loadBereitschaft()]);
@@ -877,6 +939,114 @@ function renderGrid() {
   }
 
   document.getElementById('gridBody').innerHTML = html;
+  renderMonthOverview();
+}
+
+// ─── Monatsübersicht (kompakt: Mitarbeiter × Tage) ──────────
+let planView = 'overview';
+
+function mpEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function setPlanView(v) {
+  planView = (v === 'edit') ? 'edit' : 'overview';
+  const ov = planView === 'overview';
+  document.getElementById('overviewView').style.display = ov ? '' : 'none';
+  document.getElementById('editView').style.display = ov ? 'none' : '';
+  const z = document.getElementById('zoomWrap');
+  if (z) z.classList.toggle('zoom-hidden', ov);
+  document.getElementById('viewBtnOv').classList.toggle('active', ov);
+  document.getElementById('viewBtnEdit').classList.toggle('active', !ov);
+  try { localStorage.setItem('dienstplan_planview', planView); } catch (e) {}
+  if (ov) renderMonthOverview();
+}
+
+function restorePlanView() {
+  let v = 'overview';
+  try { v = localStorage.getItem('dienstplan_planview') || 'overview'; } catch (e) {}
+  setPlanView(v);
+}
+
+function goToDay(ds) {
+  setPlanView('edit');
+  const row = document.querySelector(`#gridBody tr[data-date="${ds}"]`);
+  if (!row) return;
+  row.scrollIntoView({ block: 'center' });
+  row.classList.add('row-flash');
+  setTimeout(() => row.classList.remove('row-flash'), 1800);
+}
+
+function renderMonthOverview() {
+  const table = document.getElementById('mpTable');
+  if (!table) return;
+  const y = currentYear, m = currentMonth;
+  const dim = new Date(y, m + 1, 0).getDate();
+  const t = new Date();
+  const todayStr = dateStr(t.getFullYear(), t.getMonth(), t.getDate());
+
+  const days = [];
+  for (let d = 1; d <= dim; d++) {
+    const dt = new Date(y, m, d, 12);
+    const ds = dateStr(y, m, d);
+    const dow = dt.getDay();
+    days.push({ d, ds, dow, kw: getISOWeek(dt), we: dow === 0 || dow === 6, ft: FEIERTAGE_NRW[ds] || null });
+  }
+  const colCls = x => (x.we ? ' mp-we' : '') + (x.ft ? ' mp-ft' : '') + (x.ds === todayStr ? ' mp-today' : '');
+
+  // Kopf: KW-Zeile (zusammengefasst) + Tag-Zeile
+  let kwRow = '<tr><th class="mp-name mp-corner" rowspan="2">Mitarbeiter</th>';
+  for (let i = 0; i < days.length; ) {
+    let j = i; while (j < days.length && days[j].kw === days[i].kw) j++;
+    kwRow += `<th class="mp-kw" colspan="${j - i}">KW ${days[i].kw}</th>`;
+    i = j;
+  }
+  kwRow += '</tr>';
+  const dayRow = '<tr>' + days.map(x =>
+    `<th class="mp-th${colCls(x)}" title="${mpEsc(x.ft || '')}"><span class="mp-dow">${TAGE_KURZ[x.dow]}</span><span class="mp-dnum">${x.d}</span></th>`
+  ).join('') + '</tr>';
+
+  // Zeilen je Mitarbeiter
+  let body = '';
+  MITARBEITER.forEach((ma, i) => {
+    body += `<tr><th class="mp-name">${mpEsc(MA_SHORT[i])}</th>`;
+    days.forEach(x => {
+      const entry = data[x.ds]?.entries?.[ma] || { text: '', kat: '' };
+      const k = katInfo(entry.kat);
+      const text = (entry.text || '').trim();
+      const comments = (Array.isArray(entry.comments) ? entry.comments : []).map(c => (c || '').trim()).filter(Boolean);
+      const rangeArts = getBereitschaftForDay(ma, x.ds);
+      const ruf = !!entry.ruf || rangeArts.includes('Ruf');
+      const winter = !!entry.winter || rangeArts.includes('Winter');
+      const style = k.color ? ` style="background:${k.color};color:${k.textColor};"` : '';
+
+      const tip = [`${ma} · ${fmtDate(x.ds)} (${TAGE_KURZ[x.dow]})`];
+      if (x.ft) tip.push(x.ft);
+      if (entry.kat) tip.push(k.label + (text ? ': ' + text : ''));
+      else if (text) tip.push(text);
+      comments.forEach(c => tip.push('💬 ' + c));
+      if (ruf) tip.push('📞 Rufbereitschaft');
+      if (winter) tip.push('❄ Winterdienst');
+
+      const flags = (ruf ? '📞' : '') + (winter ? '❄' : '') + (comments.length ? '💬' : '');
+      body += `<td class="mp-cell${colCls(x)}"${style} title="${mpEsc(tip.join('\n'))}" onclick="goToDay('${x.ds}')">`
+        + (entry.kat ? `<div class="mp-code">${mpEsc(entry.kat)}</div>` : '')
+        + (text ? `<div class="mp-txt">${mpEsc(text)}</div>` : '')
+        + (flags ? `<div class="mp-ber">${flags}</div>` : '')
+        + '</td>';
+    });
+    body += '</tr>';
+  });
+
+  // Tagesnotiz-Zeile
+  body += '<tr class="mp-note-row"><th class="mp-name">📝 Notiz</th>';
+  days.forEach(x => {
+    const notiz = (data[x.ds]?.notiz || '').trim();
+    body += `<td class="mp-cell${colCls(x)}" title="${mpEsc(notiz)}" onclick="goToDay('${x.ds}')">${notiz ? `<div class="mp-txt">${mpEsc(notiz)}</div>` : ''}</td>`;
+  });
+  body += '</tr>';
+
+  table.innerHTML = `<thead>${kwRow}${dayRow}</thead><tbody>${body}</tbody>`;
 }
 
 // ─── Input handlers ────────────────────────────────────────
@@ -1872,7 +2042,10 @@ function transferMonthToPlan() {
       let text = TASK_LABEL[a.task] || a.task;
       if (a.task === 'Sonstiges' && a.note) text = a.note;
       else if (a.note) text += ` (${a.note})`;
-      dayEntry.entries[ma] = { text, kat };
+      // Bestehende manuelle Angaben (Kommentare, Ruf-/Winterdienst-Flags) bleiben erhalten,
+      // nur Kategorie und Eintragstext werden aus dem Rotationsplan übernommen.
+      const prev = dayEntry.entries[ma] || {};
+      dayEntry.entries[ma] = { ...prev, text, kat };
     });
     if (rd.note && !dayEntry.notiz) dayEntry.notiz = rd.note;
     transferred++;
@@ -2007,6 +2180,7 @@ async function startApp() {
 
   renderGrid();
   restoreGridZoom();
+  restorePlanView();
   populateOvFilters();
   buildUrlaubSelect();
   buildSonstigesSelect();
