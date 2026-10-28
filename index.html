@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dienstplan 2025/2026</title>
+<title>Dienstplan</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
@@ -239,14 +239,42 @@ tr.is-weekend .cell-input, tr.is-weekend .kat-sel { opacity: 0.35; }
 .mp-table th.mp-th.mp-we { background:#181c24; }
 .mp-table th.mp-th.mp-ft { background:var(--holiday-bg); color:var(--blue-light); }
 .mp-table th.mp-th.mp-today { box-shadow: inset 0 -3px 0 var(--green); }
-.mp-cell { height:62px; padding:3px 2px; vertical-align:top; text-align:center; cursor:pointer; overflow:hidden; background:var(--white); color:var(--muted); }
+.mp-cell { height:72px; padding:3px 2px; vertical-align:top; text-align:center; cursor:pointer; overflow:hidden; background:var(--white); color:var(--muted); }
 .mp-cell.mp-we { background:var(--weekend-bg); }
 .mp-cell.mp-ft { background:var(--holiday-bg); }
 .mp-cell.mp-today { box-shadow: inset 2px 0 0 var(--green), inset -2px 0 0 var(--green); }
 .mp-cell:hover { outline:2px solid var(--blue-light); outline-offset:-2px; filter:brightness(1.15); }
 .mp-code { font-size:11px; font-weight:800; line-height:1.15; }
-.mp-txt { font-size:9px; font-weight:600; line-height:1.15; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-.mp-ber { font-size:9px; line-height:1.2; }
+.mp-txt { font-size:9px; font-weight:600; line-height:1.15; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.mp-ber { display:flex; justify-content:center; flex-wrap:wrap; gap:2px; margin-top:2px; line-height:1; }
+/* Icons für Rufbereitschaft / Winterdienst / Kommentar: farbige Kacheln, gut sichtbar */
+.mp-ico { display:inline-flex; align-items:center; justify-content:center; min-width:17px; height:17px; padding:0; border-radius:4px; font-size:12px; line-height:1; }
+.mp-ico-ruf { background:#9b59b6; }
+.mp-ico-winter { background:#5dade2; }
+.mp-ico-komm { background:rgba(0,0,0,0.35); }
+
+/* Handy-Ansicht der Monatsübersicht: Tage untereinander, 5 Mitarbeiter nebeneinander –
+   passt in die Bildschirmbreite, es wird nur noch senkrecht gescrollt. */
+.mp-wrap.mp-wrap-v { overflow:visible; }
+.mp-v { border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed; }
+.mp-v th, .mp-v td { border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
+.mp-v thead th { position:sticky; top:0; z-index:5; background:var(--blue); color:#fff; font-size:12px; font-weight:700; padding:8px 1px; text-align:center; overflow:hidden; text-overflow:ellipsis; }
+.mp-v thead th.mpv-h-date { width:44px; }
+.mp-v tr.mpv-kw td { background:#a35608; color:#fff; font-size:11px; font-weight:700; padding:3px 8px; text-align:left; }
+.mp-v th.mpv-date { background:#2a3342; color:var(--text); font-weight:400; text-align:center; padding:4px 0; line-height:1.15; }
+.mp-v th.mpv-date .mp-dow { font-size:11px; }
+.mp-v th.mpv-date .mp-dnum { font-size:16px; }
+.mp-v tr.mpv-we th.mpv-date, .mp-v tr.mpv-we td { background:#181c24; }
+.mp-v tr.mpv-ft th.mpv-date, .mp-v tr.mpv-ft td { background:var(--holiday-bg); }
+.mp-v tr.mpv-today th.mpv-date { box-shadow: inset 4px 0 0 var(--green); }
+.mp-v td.mpv-cell { height:auto; min-height:54px; padding:5px 1px; text-align:center; vertical-align:middle; cursor:pointer; color:var(--muted); overflow:hidden; }
+.mp-v td.mpv-cell:active { filter:brightness(1.2); }
+.mpv-kat { font-size:11px; font-weight:800; line-height:1.15; white-space:nowrap; }
+.mpv-txt { font-size:11px; font-weight:600; line-height:1.15; overflow-wrap:anywhere; margin-top:1px; }
+.mp-v .mp-ber { gap:3px; margin-top:3px; }
+.mp-v .mp-ico { min-width:26px; height:26px; font-size:17px; border-radius:6px; }
+.mp-v td.mpv-note { text-align:left; padding:4px 8px; font-size:12px; color:var(--text); background:#101820; }
+.mp-v tr.mpv-noterow td { border-bottom-width:2px; }
 .mp-note-row .mp-cell { height:auto; min-height:26px; }
 .mp-note-row .mp-txt { color:var(--text); font-weight:400; -webkit-line-clamp:2; }
 tr.row-flash td { box-shadow: inset 0 0 0 9999px rgba(224,122,28,0.28); }
@@ -265,6 +293,7 @@ tr.row-flash td { box-shadow: inset 0 0 0 9999px rgba(224,122,28,0.28); }
   .mp-cell.mp-ft { background:#fdf3d9; }
   .mp-txt { font-size:7.5px; }
   .mp-note-row .mp-txt { color:#000; }
+  .mp-ico { background:none !important; min-width:0; height:auto; font-size:9px; }
 }
 
 /* ─── Rotationsplan ──────────────────────────────────────── */
@@ -308,6 +337,10 @@ tr.block-sep td { background:#0d1016 !important; color:#3a4560; font-size:11px; 
 .ber-flag { display:inline-block; font-size:9px; font-weight:700; border-radius:3px; padding:1px 5px; margin-top:3px; margin-right:3px; }
 .ber-Ruf    { background:#9b59b6; color:#fff; }
 .ber-Winter { background:#5dade2; color:#0a1e2b; }
+/* Legende: Ruf/Winter gut lesbar (die allgemeine Legenden-Regel machte den Text grau und ließ ihn umbrechen) */
+.legend-bar .ber-flag { font-size:13px; padding:3px 9px; margin:0; white-space:nowrap; flex-shrink:0; }
+.legend-bar .ber-Ruf { color:#fff; }
+.legend-bar .ber-Winter { color:#0a1e2b; }
 
 /* Aufklappbare Tagesansicht je Woche (einzelne freie Tage / Fortbildungen) */
 .kw-cell, .dates-cell { cursor: pointer; user-select: none; }
@@ -326,8 +359,11 @@ tr.rot-days-row td { background: #0d1016; padding: 8px 10px 10px 10px; border-bo
 .rot-day-hint { font-size: 10px; color: var(--muted); margin-top: 6px; }
 
 /* Bereitschaft manuell umschaltbar im Monatsplan */
-.ber-toggle { display:flex; gap:3px; margin-top:3px; }
-.ber-btn { border:1px solid var(--border); background:transparent; border-radius:3px; font-size:10px; line-height:1.4; padding:1px 5px; cursor:pointer; opacity:0.4; color:var(--text); }
+.ber-toggle { display:flex; gap:5px; margin-top:3px; }
+@media (max-width: 768px) {
+  .ber-btn { font-size:19px; padding:5px 12px; min-width:44px; }
+}
+.ber-btn { border:1px solid var(--border); background:transparent; border-radius:5px; font-size:15px; line-height:1.3; padding:2px 8px; cursor:pointer; opacity:0.45; color:var(--text); }
 .ber-btn:hover { opacity:0.75; }
 .ber-btn.active { opacity:1; }
 .ber-btn-Ruf.active { background:#9b59b6; border-color:#9b59b6; color:#fff; }
@@ -359,7 +395,7 @@ tr.rot-days-row td { background: #0d1016; padding: 8px 10px 10px 10px; border-bo
 <div id="authOverlay">
   <div class="auth-box">
     <div class="logo" style="background:linear-gradient(135deg,var(--blue-light),var(--blue));border-radius:9px;display:flex;align-items:center;justify-content:center;">📅</div>
-    <h2>Dienstplan 2025/2026</h2>
+    <h2>Dienstplan</h2>
     <p>Bitte Passwort eingeben</p>
     <input type="password" id="authInput" placeholder="Passwort" autocomplete="off" onkeydown="if(event.key==='Enter')checkPassword()">
     <button class="btn btn-primary" onclick="checkPassword()">Freischalten</button>
@@ -372,7 +408,7 @@ tr.rot-days-row td { background: #0d1016; padding: 8px 10px 10px 10px; border-bo
 <header>
   <div class="header-left">
     <div class="logo">📅</div>
-    <div><h1>Dienstplan 2025/2026</h1><div class="subtitle">Monatliche Einsatzplanung · Kanalunterhaltung</div></div>
+    <div><h1>Dienstplan</h1><div class="subtitle">Monatliche Einsatzplanung · Kanalunterhaltung</div></div>
   </div>
   <div id="syncStatus">Lade…</div>
 </header>
@@ -424,7 +460,7 @@ tr.rot-days-row td { background: #0d1016; padding: 8px 10px 10px 10px; border-bo
   <div id="overviewView">
     <div class="card" style="padding: 12px;">
       <div class="mp-wrap"><table class="mp-table" id="mpTable"></table></div>
-      <div class="no-print" style="font-size:11px;color:var(--muted);margin-top:8px;">Klick auf ein Feld öffnet den Tag in der Bearbeitungsansicht. Mauszeiger über ein Feld zeigt den vollständigen Eintrag.</div>
+      <div class="no-print" style="font-size:11px;color:var(--muted);margin-top:8px;">Tippen/Klicken auf ein Feld öffnet den Tag in der Bearbeitungsansicht.</div>
     </div>
   </div>
 
@@ -521,11 +557,7 @@ tr.rot-days-row td { background: #0d1016; padding: 8px 10px 10px 10px; border-bo
     </div>
     <div class="gen-bar">
       <label>Jahr:</label>
-      <select id="genYear" onchange="renderRotation()">
-        <option value="2026" selected>2026</option>
-        <option value="2025">2025</option>
-        <option value="2027">2027</option>
-      </select>
+      <select id="genYear" onchange="renderRotation()"></select>
       <label>Monat:</label>
       <select id="genMonth">
         <option value="0">Januar</option>
@@ -651,7 +683,7 @@ const firebaseConfig = {
    service cloud.firestore {
      match /databases/{database}/documents {
        match /{document=**} {
-         allow read, write: if request.time < timestamp.date(2027,1,1);
+         allow read, write: if request.time < timestamp.date(2027,1,1); // ACHTUNG: läuft am 01.01.2027 ab – Datum in der Firebase-Konsole verlängern!
        }
      }
    }
@@ -701,23 +733,49 @@ const KATEGORIEN = [
   { id: 'Fr',  label: 'Frei',               color: '#888',    textColor: 'white' },
 ];
 
-const FEIERTAGE_NRW = {
-  '2025-01-01':'Neujahr', '2025-04-18':'Karfreitag', '2025-04-21':'Ostermontag',
-  '2025-05-01':'Tag der Arbeit', '2025-05-29':'Christi Himmelfahrt',
-  '2025-06-09':'Pfingstmontag', '2025-06-19':'Fronleichnam',
-  '2025-10-03':'Tag d. Dt. Einheit', '2025-11-01':'Allerheiligen',
-  '2025-12-25':'1. Weihnachtstag', '2025-12-26':'2. Weihnachtstag',
-  '2026-01-01':'Neujahr', '2026-04-03':'Karfreitag', '2026-04-06':'Ostermontag',
-  '2026-05-01':'Tag der Arbeit', '2026-05-14':'Christi Himmelfahrt',
-  '2026-05-25':'Pfingstmontag', '2026-06-04':'Fronleichnam',
-  '2026-10-03':'Tag d. Dt. Einheit', '2026-11-01':'Allerheiligen',
-  '2026-12-25':'1. Weihnachtstag', '2026-12-26':'2. Weihnachtstag',
-};
+/* Gesetzliche Feiertage NRW – für jedes Jahr berechnet (Ostern nach Gauß/Meeus), keine
+   feste Jahreszahl-Tabelle mehr. Ergebnis je Jahr wird zwischengespeichert. */
+const _feiertageCache = {};
+function easterSunday(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(y, month - 1, day, 12);
+}
+function feiertageNRW(y) {
+  if (_feiertageCache[y]) return _feiertageCache[y];
+  const out = {};
+  const add = (dt, name) => { out[`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`] = name; };
+  const easter = easterSunday(y);
+  const off = n => { const dt = new Date(easter); dt.setDate(dt.getDate() + n); return dt; };
+  add(new Date(y, 0, 1, 12), 'Neujahr');
+  add(off(-2), 'Karfreitag');
+  add(off(1), 'Ostermontag');
+  add(new Date(y, 4, 1, 12), 'Tag der Arbeit');
+  add(off(39), 'Christi Himmelfahrt');
+  add(off(50), 'Pfingstmontag');
+  add(off(60), 'Fronleichnam');
+  add(new Date(y, 9, 3, 12), 'Tag d. Dt. Einheit');
+  add(new Date(y, 10, 1, 12), 'Allerheiligen');
+  add(new Date(y, 11, 25, 12), '1. Weihnachtstag');
+  add(new Date(y, 11, 26, 12), '2. Weihnachtstag');
+  return (_feiertageCache[y] = out);
+}
+function getFeiertag(ds) {
+  const y = parseInt(String(ds).slice(0, 4), 10);
+  return y ? (feiertageNRW(y)[ds] || null) : null;
+}
 
 // data[dateStr] = { entries: { 'Stefan Bertelmann': { text, kat } }, notiz }
 let data = {};
-let currentYear = 2026;
-let currentMonth = 6; // 0-indexed; default = Juli 2026 (today)
+let currentYear = new Date().getFullYear();
+let currentMonth = new Date().getMonth(); // 0-indexed; wird beim Start auf heute gesetzt
 
 let saveTimer = null;
 
@@ -789,8 +847,11 @@ function dateStr(y, m, d) { return `${y}-${pad(m+1)}-${pad(d)}`; }
 function getISOWeek(date) {
   const d = new Date(date); d.setHours(12);
   d.setDate(d.getDate() + 4 - (d.getDay() || 7));
-  const y1 = new Date(d.getFullYear(), 0, 1);
-  return Math.ceil((((d - y1) / 86400000) + 1) / 7);
+  const y1 = new Date(d.getFullYear(), 0, 1, 12);
+  // Tagesdifferenz gerundet (Sommerzeit-sicher); Woche = (Tag des Jahres - 1) / 7 + 1.
+  // Die frühere Formel lag in Jahren, die an einem Freitag beginnen (z. B. 2027), eine KW daneben.
+  const diff = Math.round((d - y1) / 86400000);
+  return Math.floor(diff / 7) + 1;
 }
 
 function fmtDate(ds) {
@@ -887,7 +948,7 @@ function renderGrid() {
     const dow = dateObj.getDay(); // 0=So,6=Sa
     const isWeekend = dow === 0 || dow === 6;
     const isoKW = getISOWeek(dateObj);
-    const feiertag = FEIERTAGE_NRW[ds] || null;
+    const feiertag = getFeiertag(ds);
     const tagKurz = TAGE_KURZ[dow];
 
     // KW separator row
@@ -977,6 +1038,39 @@ function goToDay(ds) {
   setTimeout(() => row.classList.remove('row-flash'), 1800);
 }
 
+/* Handy-Layout (Tage untereinander) bei schmalen Bildschirmen; beim Drucken immer die
+   breite Monatstabelle. */
+let mpForceWide = false;
+const mpNarrowMQ = window.matchMedia('(max-width: 768px)');
+function mpIsVertical() { return mpNarrowMQ.matches && !mpForceWide; }
+(mpNarrowMQ.addEventListener ? mpNarrowMQ.addEventListener('change', () => renderMonthOverview())
+                              : mpNarrowMQ.addListener(() => renderMonthOverview()));
+window.addEventListener('beforeprint', () => { mpForceWide = true; renderMonthOverview(); });
+window.addEventListener('afterprint',  () => { mpForceWide = false; renderMonthOverview(); });
+
+const MP_KAT_SHORT = { K:'Kontrolle', R:'Reinig.', RE:'Regen', Ra:'Ratten', S:'Sonst.', Fr:'Frei' };
+
+function mpCellInfo(ma, x) {
+  const entry = data[x.ds]?.entries?.[ma] || { text: '', kat: '' };
+  const k = katInfo(entry.kat);
+  const text = (entry.text || '').trim();
+  const comments = (Array.isArray(entry.comments) ? entry.comments : []).map(c => (c || '').trim()).filter(Boolean);
+  const rangeArts = getBereitschaftForDay(ma, x.ds);
+  const ruf = !!entry.ruf || rangeArts.includes('Ruf');
+  const winter = !!entry.winter || rangeArts.includes('Winter');
+  const tip = [`${ma} · ${fmtDate(x.ds)} (${TAGE_KURZ[x.dow]})`];
+  if (x.ft) tip.push(x.ft);
+  if (entry.kat) tip.push(k.label + (text ? ': ' + text : ''));
+  else if (text) tip.push(text);
+  comments.forEach(c => tip.push('💬 ' + c));
+  if (ruf) tip.push('📞 Rufbereitschaft');
+  if (winter) tip.push('❄ Winterdienst');
+  const icons = (ruf ? '<span class="mp-ico mp-ico-ruf" aria-label="Rufbereitschaft">📞</span>' : '')
+              + (winter ? '<span class="mp-ico mp-ico-winter" aria-label="Winterdienst">❄️</span>' : '')
+              + (comments.length ? '<span class="mp-ico mp-ico-komm" aria-label="Kommentar">💬</span>' : '');
+  return { entry, k, text, tip: tip.join('\n'), icons };
+}
+
 function renderMonthOverview() {
   const table = document.getElementById('mpTable');
   if (!table) return;
@@ -990,11 +1084,49 @@ function renderMonthOverview() {
     const dt = new Date(y, m, d, 12);
     const ds = dateStr(y, m, d);
     const dow = dt.getDay();
-    days.push({ d, ds, dow, kw: getISOWeek(dt), we: dow === 0 || dow === 6, ft: FEIERTAGE_NRW[ds] || null });
+    days.push({ d, ds, dow, kw: getISOWeek(dt), we: dow === 0 || dow === 6, ft: getFeiertag(ds) });
   }
+
+  const wrap = table.closest('.mp-wrap');
+  const vertical = mpIsVertical();
+  if (wrap) wrap.classList.toggle('mp-wrap-v', vertical);
+
+  if (vertical) {
+    // ── Handy: Tage als Zeilen, Mitarbeiter als Spalten ──
+    table.className = 'mp-v';
+    let head = '<thead><tr><th class="mpv-h-date">Tag</th>' + MA_SHORT.map(n => `<th>${mpEsc(n)}</th>`).join('') + '</tr></thead>';
+    let body = '';
+    let lastKW = null;
+    days.forEach(x => {
+      if (x.kw !== lastKW) {
+        body += `<tr class="mpv-kw"><td colspan="${1 + MITARBEITER.length}">KW ${x.kw}</td></tr>`;
+        lastKW = x.kw;
+      }
+      const cls = (x.we ? ' mpv-we' : '') + (x.ft ? ' mpv-ft' : '') + (x.ds === todayStr ? ' mpv-today' : '');
+      const notiz = (data[x.ds]?.notiz || '').trim();
+      body += `<tr class="${cls.trim()}${notiz ? ' mpv-noterow' : ''}"><th class="mpv-date" title="${mpEsc(x.ft || '')}"><span class="mp-dow">${TAGE_KURZ[x.dow]}</span><span class="mp-dnum">${x.d}</span></th>`;
+      MITARBEITER.forEach(ma => {
+        const c = mpCellInfo(ma, x);
+        const style = c.k.color ? ` style="background:${c.k.color};color:${c.k.textColor};"` : '';
+        body += `<td class="mpv-cell"${style} title="${mpEsc(c.tip)}" onclick="goToDay('${x.ds}')">`
+          + (c.entry.kat ? `<div class="mpv-kat">${mpEsc(MP_KAT_SHORT[c.entry.kat] || c.entry.kat)}</div>` : '')
+          + (c.text ? `<div class="mpv-txt">${mpEsc(c.text)}</div>` : '')
+          + (c.icons ? `<div class="mp-ber">${c.icons}</div>` : '')
+          + '</td>';
+      });
+      body += '</tr>';
+      if (notiz || x.ft) {
+        body += `<tr class="${cls.trim()}"><td class="mpv-note" colspan="${1 + MITARBEITER.length}" onclick="goToDay('${x.ds}')">${x.ft ? '🔴 ' + mpEsc(x.ft) : ''}${x.ft && notiz ? ' · ' : ''}${notiz ? '📝 ' + mpEsc(notiz) : ''}</td></tr>`;
+      }
+    });
+    table.innerHTML = head + `<tbody>${body}</tbody>`;
+    return;
+  }
+
+  // ── Desktop/Druck: Mitarbeiter als Zeilen, Tage als Spalten ──
+  table.className = 'mp-table';
   const colCls = x => (x.we ? ' mp-we' : '') + (x.ft ? ' mp-ft' : '') + (x.ds === todayStr ? ' mp-today' : '');
 
-  // Kopf: KW-Zeile (zusammengefasst) + Tag-Zeile
   let kwRow = '<tr><th class="mp-name mp-corner" rowspan="2">Mitarbeiter</th>';
   for (let i = 0; i < days.length; ) {
     let j = i; while (j < days.length && days[j].kw === days[i].kw) j++;
@@ -1006,39 +1138,21 @@ function renderMonthOverview() {
     `<th class="mp-th${colCls(x)}" title="${mpEsc(x.ft || '')}"><span class="mp-dow">${TAGE_KURZ[x.dow]}</span><span class="mp-dnum">${x.d}</span></th>`
   ).join('') + '</tr>';
 
-  // Zeilen je Mitarbeiter
   let body = '';
   MITARBEITER.forEach((ma, i) => {
     body += `<tr><th class="mp-name">${mpEsc(MA_SHORT[i])}</th>`;
     days.forEach(x => {
-      const entry = data[x.ds]?.entries?.[ma] || { text: '', kat: '' };
-      const k = katInfo(entry.kat);
-      const text = (entry.text || '').trim();
-      const comments = (Array.isArray(entry.comments) ? entry.comments : []).map(c => (c || '').trim()).filter(Boolean);
-      const rangeArts = getBereitschaftForDay(ma, x.ds);
-      const ruf = !!entry.ruf || rangeArts.includes('Ruf');
-      const winter = !!entry.winter || rangeArts.includes('Winter');
-      const style = k.color ? ` style="background:${k.color};color:${k.textColor};"` : '';
-
-      const tip = [`${ma} · ${fmtDate(x.ds)} (${TAGE_KURZ[x.dow]})`];
-      if (x.ft) tip.push(x.ft);
-      if (entry.kat) tip.push(k.label + (text ? ': ' + text : ''));
-      else if (text) tip.push(text);
-      comments.forEach(c => tip.push('💬 ' + c));
-      if (ruf) tip.push('📞 Rufbereitschaft');
-      if (winter) tip.push('❄ Winterdienst');
-
-      const flags = (ruf ? '📞' : '') + (winter ? '❄' : '') + (comments.length ? '💬' : '');
-      body += `<td class="mp-cell${colCls(x)}"${style} title="${mpEsc(tip.join('\n'))}" onclick="goToDay('${x.ds}')">`
-        + (entry.kat ? `<div class="mp-code">${mpEsc(entry.kat)}</div>` : '')
-        + (text ? `<div class="mp-txt">${mpEsc(text)}</div>` : '')
-        + (flags ? `<div class="mp-ber">${flags}</div>` : '')
+      const c = mpCellInfo(ma, x);
+      const style = c.k.color ? ` style="background:${c.k.color};color:${c.k.textColor};"` : '';
+      body += `<td class="mp-cell${colCls(x)}"${style} title="${mpEsc(c.tip)}" onclick="goToDay('${x.ds}')">`
+        + (c.entry.kat ? `<div class="mp-code">${mpEsc(c.entry.kat)}</div>` : '')
+        + (c.text ? `<div class="mp-txt">${mpEsc(c.text)}</div>` : '')
+        + (c.icons ? `<div class="mp-ber">${c.icons}</div>` : '')
         + '</td>';
     });
     body += '</tr>';
   });
 
-  // Tagesnotiz-Zeile
   body += '<tr class="mp-note-row"><th class="mp-name">📝 Notiz</th>';
   days.forEach(x => {
     const notiz = (data[x.ds]?.notiz || '').trim();
@@ -1176,6 +1290,9 @@ async function loadRotData() {
     rattenState = (d.rattenState && typeof d.rattenState.roundCount === 'number')
       ? d.rattenState
       : { roundCount: 0, lastAbs: null, soloIdx: 0 };
+    // Wochenzähler aus älteren Versionen (year*52+kw) auf den neuen Wochenindex umrechnen
+    Object.values(chairState).forEach(c => { if (c && c.sinceAbs !== undefined) c.sinceAbs = migrateAbs(c.sinceAbs); });
+    if (rattenState.lastAbs !== null) rattenState.lastAbs = migrateAbs(rattenState.lastAbs);
   } catch (err) {
     console.error('Ladefehler (rotation):', err);
     rotData = {}; chairState = {}; rattenState = { roundCount: 0, lastAbs: null, soloIdx: 0 };
@@ -1199,28 +1316,36 @@ function scheduleRotSave() {
 
 function weekKey(year, kw) { return `${year}-W${String(kw).padStart(2,'0')}`; }
 
-/* Fortlaufende "absolute" Wochennummer über Jahresgrenzen hinweg (Näherung: 52 Wochen/Jahr,
-   konsistent mit der übrigen vereinfachten ISO-Wochen-Handhabung dieser App). Damit lässt sich
-   die Dauer einer Zuweisung ("seit wann") auch über einen Monats-/Jahreswechsel hinweg korrekt
-   berechnen, statt bei jeder Generierung bei 0 neu anzufangen. */
-function absWeek(year, kw) { return year * 52 + kw; }
-function absToYearKW(abs) {
-  const year = Math.floor((abs - 1) / 52);
-  const kw = abs - year * 52;
-  return { year, kw };
+/* Fortlaufende Wochennummer (echter Wochenindex seit Montag, 03.01.2000). Dadurch stimmen
+   Wochenabstände über Jahreswechsel und 53-Wochen-Jahre hinweg exakt (z. B. KW 53/2026 → KW 1/2027). */
+function absWeek(year, kw) {
+  const s = getWeekStart(year, kw);
+  return Math.round((Date.UTC(s.getFullYear(), s.getMonth(), s.getDate()) - Date.UTC(2000, 0, 3)) / 604800000);
 }
+function absToYearKW(abs) {
+  return isoYearKW(new Date(2000, 0, 3 + abs * 7, 12));
+}
+/* Ältere Versionen speicherten year*52+kw (Werte > 50000). Beim Laden einmalig umrechnen. */
+function migrateAbs(v) {
+  if (typeof v !== 'number' || v <= 50000) return v;
+  const year = Math.floor((v - 1) / 52);
+  const kw = Math.min(v - year * 52, isoWeeksInYear(year));
+  return absWeek(year, kw);
+}
+/* Anzahl ISO-Wochen eines Jahres (52 oder 53). Der 28.12. liegt immer in der letzten KW. */
+function isoWeeksInYear(year) { return getISOWeek(new Date(year, 11, 28, 12)); }
 
-/* Ermittelt, welche Kalenderwochen zu einem Monat gehören (für die Monats-Auswahl
-   bei der Generierung). Näherung: erste KW = KW des 1. Tages, letzte KW = KW des
-   letzten Tages des Monats. Für den Jahreswechsel-Randfall (z. B. Dezember) wird
-   defensiv abgefangen, damit die Spanne innerhalb 1–52 bleibt. */
-function monthWeekRange(year, month) {
-  const first = new Date(year, month, 1, 12);
-  const last = new Date(year, month + 1, 0, 12);
-  const start = getISOWeek(first);
-  let end = getISOWeek(last);
-  if (end < start) end = Math.min(52, start + 5);
-  return { start: Math.max(1, start), end: Math.min(52, end) };
+/* Alle Kalenderwochen (ISO-Jahr + KW), die mindestens einen Tag des Monats enthalten, in
+   zeitlicher Reihenfolge. Funktioniert über den Jahreswechsel (z. B. Jan 2027: 2026-W53, 2027-W01…). */
+function monthWeeks(year, month) {
+  const last = new Date(year, month + 1, 0, 12).getDate();
+  const out = []; const seen = new Set();
+  for (let d = 1; d <= last; d++) {
+    const w = isoYearKW(new Date(year, month, d, 12));
+    const k = weekKey(w.year, w.kw);
+    if (!seen.has(k)) { seen.add(k); out.push(w); }
+  }
+  return out;
 }
 
 function getWeekStart(year, kw) {
@@ -1283,7 +1408,7 @@ function getMonatsplanBasisForWeek(ma, year, kw) {
     const kat = entry?.kat;
     if (kat && KAT_TO_TASK[kat] && kat !== 'Fr') {
       counts[kat] = (counts[kat] || 0) + 1;
-      if (entry.text) notes[kat] = entry.text;
+      if (kat === 'S' && entry.text) notes[kat] = entry.text; // nur Bezeichnung bei Sonstiges
     }
   }
   let bestKat = null, bestCount = 0;
@@ -1658,29 +1783,52 @@ function cycleDayOverride(wk, ma, ds) {
 // ─── Automatische Generierung ─────────────────────────────────
 /* Ermittelt für jeden Mitarbeiter die bisherige Wochenanzahl je Aufgabe aus
    ALLEN bereits gespeicherten Jahren/Wochen (Fairness über die Zeit hinweg). */
-function computeTaskCounts(excludeYear, prevYear, prevMonthIdx) {
+/* Liefert Jahr + KW (ISO) zu einem Datum. Das Jahr richtet sich nach dem Donnerstag
+   der Woche, passend zu getWeekStart(year, kw). */
+function isoYearKW(date) {
+  const d = new Date(date); d.setHours(12);
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  return { year: d.getFullYear(), kw: getISOWeek(date) };
+}
+
+/* target = { limitAbs } -> Generierung: gezählt werden alle Wochen VOR dem
+   Zielmonat. Dabei hat der tatsächliche Monatsplan (Vormonate, auch von Hand
+   geändert) Vorrang; wo dort nichts steht, gilt der gespeicherte Rotationsplan.
+   target = null -> nur gespeicherter Rotationsplan (Fairness-Übersicht, alle Wochen). */
+function computeTaskCounts(target) {
   const counts = {};
   MITARBEITER.forEach(m => counts[m] = { Reinigung:0, Kontrolle:0, Regeneinlaeufe:0, Ratten:0 });
-  Object.entries(rotData).forEach(([wk, rd]) => {
-    if (excludeYear && wk.startsWith(excludeYear + '-W')) return; // Zielspanne selbst nicht mitzählen, wird neu erzeugt
+
+  if (!target) {
+    Object.values(rotData).forEach(rd => {
+      MITARBEITER.forEach(m => {
+        const t = rd.employees?.[m]?.task;
+        if (t && counts[m][t] !== undefined) counts[m][t]++;
+      });
+    });
+    return counts;
+  }
+
+  const limitAbs = target.limitAbs; // Zielmonat selbst wird neu erzeugt
+  const weeks = new Map();
+  Object.keys(rotData).forEach(wk => {
+    const mm = /^(\d{4})-W(\d{2})$/.exec(wk);
+    if (mm) weeks.set(wk, { year: +mm[1], kw: +mm[2] });
+  });
+  Object.keys(data).forEach(ds => {
+    const [y, mo, d] = ds.split('-').map(Number);
+    if (!y || !mo || !d) return;
+    const w = isoYearKW(new Date(y, mo - 1, d, 12));
+    weeks.set(weekKey(w.year, w.kw), w);
+  });
+  weeks.forEach(({ year, kw }, wk) => {
+    if (absWeek(year, kw) >= limitAbs) return;
     MITARBEITER.forEach(m => {
-      const t = rd.employees?.[m]?.task;
+      const basis = getMonatsplanBasisForWeek(m, year, kw);
+      const t = basis ? basis.task : rotData[wk]?.employees?.[m]?.task;
       if (t && counts[m][t] !== undefined) counts[m][t]++;
     });
   });
-  // Zusätzlich den ganzen Vormonat aus dem Monatsplan mitzählen, sofern für die
-  // jeweilige Woche noch kein Rotationsplan-Eintrag existiert (z. B. weil dort
-  // ausschließlich von Hand im Monatsplan eingetragen wurde, ohne zu generieren).
-  if (prevYear !== undefined && prevMonthIdx !== undefined) {
-    const { start, end } = monthWeekRange(prevYear, prevMonthIdx);
-    for (let kw = start; kw <= end; kw++) {
-      if (rotData[weekKey(prevYear, kw)]) continue; // schon oben gezählt
-      MITARBEITER.forEach(m => {
-        const basis = getMonatsplanBasisForWeek(m, prevYear, kw);
-        if (basis && counts[m][basis.task] !== undefined) counts[m][basis.task]++;
-      });
-    }
-  }
   return counts;
 }
 
@@ -1709,18 +1857,29 @@ function chairTaskDefault(id, taskCounts) {
    interne, gespeicherte Zustand nicht mehr mit dem tatsächlich im Monatsplan
    stehenden Vormonat übereinstimmt (z. B. weil von Hand geändert wurde). */
 function deriveStateFromPreviousMonth(year, month) {
-  const { year: py, month: pm } = prevMonthOf(year, month);
-  const { start, end } = monthWeekRange(py, pm);
+  // Zuerst der direkte Vormonat; ist dort im Monatsplan nichts Auswertbares eingetragen,
+  // wird bis zu 6 Monate zurück nach dem letzten Monat mit Daten gesucht.
+  let cy = year, cm = month;
+  for (let back = 0; back < 6; back++) {
+    const prev = prevMonthOf(cy, cm);
+    cy = prev.year; cm = prev.month;
+    const res = deriveStateFromMonth(cy, cm);
+    if (res) return res;
+  }
+  return null;
+}
+
+function deriveStateFromMonth(py, pm) {
   const perWeek = [];
-  for (let kw = start; kw <= end; kw++) {
+  for (const w of monthWeeks(py, pm)) {
     const assign = {};
     MITARBEITER.forEach(m => {
-      const basis = getMonatsplanBasisForWeek(m, py, kw);
+      const basis = getMonatsplanBasisForWeek(m, w.year, w.kw);
       if (basis) assign[m] = basis.task;
     });
-    perWeek.push({ abs: absWeek(py, kw), assign });
+    perWeek.push({ abs: absWeek(w.year, w.kw), assign });
   }
-  if (!perWeek.length) return null;
+  if (!perWeek.some(w => Object.keys(w.assign).length)) return null; // Monat ohne Monatsplan-Daten
 
   // Aufgabe + durchgehende Wochenzahl je Mitarbeiter ermitteln. Ratten-Wochen
   // pausieren die Zählung (Regel: Ratten unterbricht, bricht den Block aber
@@ -1773,11 +1932,11 @@ function deriveStateFromPreviousMonth(year, month) {
 function autoGenRotation() {
   const year  = parseInt(document.getElementById('genYear').value);
   const month = parseInt(document.getElementById('genMonth').value);
-  const { start, end } = monthWeekRange(year, month);
+  const weeks = monthWeeks(year, month);
+  const startAbs = absWeek(weeks[0].year, weeks[0].kw);
   const firstC = document.getElementById('genRattenStart').value === 'C';
 
-  const { year: prevYear, month: prevMonth } = prevMonthOf(year, month);
-  const taskCounts = computeTaskCounts(String(year), prevYear, prevMonth);
+  const taskCounts = computeTaskCounts({ limitAbs: startAbs });
 
   // Der ganze Vormonat wird aus dem Monatsplan ausgelesen (siehe deriveStateFromPreviousMonth)
   // und dient als verlässliche Grundlage für die Fortsetzung, unabhängig davon, ob der
@@ -1795,7 +1954,7 @@ function autoGenRotation() {
     } else if (haveChairs) {
       chairs[id] = { ...chairState[id] };
     } else {
-      chairs[id] = { employee: MITARBEITER[i % MITARBEITER.length], task: chairTaskDefault(id, taskCounts), sinceAbs: absWeek(year, start) - i };
+      chairs[id] = { employee: MITARBEITER[i % MITARBEITER.length], task: chairTaskDefault(id, taskCounts), sinceAbs: startAbs - i };
     }
   });
 
@@ -1816,7 +1975,7 @@ function autoGenRotation() {
     unseated.forEach((m, i) => {
       const id = openChairIds[i];
       if (!id) return; // kann bei 5 Mitarbeitern/5 Stühlen nicht vorkommen
-      chairs[id] = { employee: m, task: chairTaskDefault(id, taskCounts), sinceAbs: absWeek(year, start) };
+      chairs[id] = { employee: m, task: chairTaskDefault(id, taskCounts), sinceAbs: startAbs };
     });
   }
 
@@ -1834,9 +1993,11 @@ function autoGenRotation() {
       if (idx !== -1) soloIdx = idx + 1;
     }
   }
-  let nextRattenAbs = lastRattenAbs !== null ? lastRattenAbs + RATTEN_ZYKLUS : absWeek(year, start) + (RATTEN_ZYKLUS - 1);
+  let nextRattenAbs = lastRattenAbs !== null ? lastRattenAbs + RATTEN_ZYKLUS : startAbs + (RATTEN_ZYKLUS - 1);
 
-  for (let kw = start; kw <= end; kw++) {
+  for (const wInfo of weeks) {
+    const kw = wInfo.kw;
+    const year = wInfo.year; // ISO-Jahr dieser Woche (kann vom Zielmonat-Jahr abweichen, z. B. KW 53 / KW 1)
     const curAbs = absWeek(year, kw);
     const assign = {};
     MITARBEITER.forEach(m => assign[m] = { task: 'Frei', note: '' });
@@ -2014,6 +2175,12 @@ function autoGenRotation() {
    übersprungen (dort gibt es im Monatsplan ohnehin keine Aufgaben). */
 const TASK_TO_KAT = { Reinigung:'R', Kontrolle:'K', Regeneinlaeufe:'RE', Ratten:'Ra', Sonstiges:'S', Urlaub:'Fr', Frei:'Fr' };
 
+/* Texte, die frühere Versionen automatisch ins Eintragsfeld geschrieben haben
+   (z. B. "Reinigung" oder "Kontrolle (Übergabe von Stefan)"). Sie werden beim
+   Übertragen entfernt, damit das Feld wieder frei für händische Einträge ist.
+   Selbst getippte Texte werden nicht angefasst. */
+const AUTO_TEXT_RE = /^(Reinigung|Kontrolle|Regeneinläufe|Regeneinlaeufe|Ratten|Urlaub|Frei|Sonstiges)( \((Übergabe (von|an) \S+|Vertretung( \(Engpass\))?)\))?$/;
+
 function transferMonthToPlan() {
   const year  = parseInt(document.getElementById('genYear').value);
   const month = parseInt(document.getElementById('genMonth').value);
@@ -2026,8 +2193,8 @@ function transferMonthToPlan() {
     if (dow === 0 || dow === 6) continue; // Wochenende: im Monatsplan ohne Aufgabe
 
     const ds = dateStr(year, month, day);
-    const kw = getISOWeek(dateObj);
-    const wk = weekKey(year, kw);
+    const iw = isoYearKW(dateObj);
+    const wk = weekKey(iw.year, iw.kw);
     const rd = rotData[wk];
     if (!rd || !rd.employees) continue;
 
@@ -2039,15 +2206,14 @@ function transferMonthToPlan() {
       const a = dayInfo || rd.employees[ma];
       if (!a) return;
       const kat = TASK_TO_KAT[a.task] || '';
-      let text = TASK_LABEL[a.task] || a.task;
-      if (a.task === 'Sonstiges' && a.note) text = a.note;
-      else if (a.note) text += ` (${a.note})`;
-      // Bestehende manuelle Angaben (Kommentare, Ruf-/Winterdienst-Flags) bleiben erhalten,
-      // nur Kategorie und Eintragstext werden aus dem Rotationsplan übernommen.
+      // Übertragen wird NUR die Kategorie (Farbe/Tätigkeit). Eintragsfeld, Kommentare,
+      // Tagesnotiz und Ruf-/Winterdienst-Flags bleiben für händische Eingaben frei bzw.
+      // unverändert. Nur automatisch erzeugte Alt-Texte werden aus dem Eintragsfeld entfernt.
       const prev = dayEntry.entries[ma] || {};
-      dayEntry.entries[ma] = { ...prev, text, kat };
+      const prevText = (prev.text || '').trim();
+      const wasAuto = AUTO_TEXT_RE.test(prevText) || (a.task === 'Sonstiges' && a.note && prevText === a.note);
+      dayEntry.entries[ma] = { ...prev, text: wasAuto ? '' : (prev.text || ''), kat };
     });
-    if (rd.note && !dayEntry.notiz) dayEntry.notiz = rd.note;
     transferred++;
   }
 
@@ -2069,7 +2235,7 @@ function transferMonthToPlan() {
 function clearRotation() {
   if (!confirm('Rotationsplan für dieses Jahr zurücksetzen? Alle manuellen Änderungen gehen verloren.')) return;
   const year = parseInt(document.getElementById('genYear').value);
-  for (let kw = 1; kw <= 52; kw++) delete rotData[weekKey(year, kw)];
+  for (let kw = 1; kw <= isoWeeksInYear(year); kw++) delete rotData[weekKey(year, kw)];
   // Auch den internen Fortsetzungs-Zustand zurücksetzen, damit die nächste Generierung
   // wirklich neu (zeitversetzt reihum) startet, statt einen alten Stand fortzuführen.
   chairState = {};
@@ -2080,7 +2246,7 @@ function clearRotation() {
 }
 
 function renderRotation() {
-  const year = parseInt(document.getElementById('genYear').value) || 2026;
+  const year = parseInt(document.getElementById('genYear').value) || new Date().getFullYear();
 
   document.getElementById('rotHead').innerHTML = `<tr>
     <th class="th-l">KW</th>
@@ -2093,7 +2259,7 @@ function renderRotation() {
   let html = '';
   let lastMonthLabel = null;
   const totalCols = 2 + MITARBEITER.length + 2; // KW, Mo-Fr, MA..., Reinigung, Notiz
-  for (let kw = 1; kw <= 52; kw++) {
+  for (let kw = 1; kw <= isoWeeksInYear(year); kw++) {
     const wk = weekKey(year, kw);
     const rd = rotData[wk] || { employees:{}, note:'' };
     const isRattenRow = MITARBEITER.some(m => rd.employees?.[m]?.task === 'Ratten');
@@ -2132,7 +2298,7 @@ function renderRotation() {
 }
 
 function renderFairness() {
-  const year = parseInt(document.getElementById('genYear').value) || 2026;
+  const year = parseInt(document.getElementById('genYear').value) || new Date().getFullYear();
   const cols = ['Reinigung','Kontrolle','Regeneinlaeufe','Ratten'];
 
   // Dieses Jahr
@@ -2166,16 +2332,32 @@ function onRotNotiz(el) {
   scheduleRotSave();
 }
 
+/* Jahresauswahl: immer ab 2 Jahren zurück bis 5 Jahre voraus (bezogen auf heute) plus alle Jahre,
+   für die bereits Daten existieren – läuft dadurch ohne Anpassung beliebig weiter. */
+function populateGenYears() {
+  const sel = document.getElementById('genYear');
+  if (!sel) return;
+  const cur = new Date().getFullYear();
+  const years = new Set();
+  for (let y = cur - 2; y <= cur + 5; y++) years.add(y);
+  Object.keys(rotData).forEach(wk => { const y = parseInt(wk, 10); if (y) years.add(y); });
+  Object.keys(data).forEach(ds => { const y = parseInt(ds.slice(0, 4), 10); if (y) years.add(y); });
+  const keep = parseInt(sel.value, 10);
+  sel.innerHTML = [...years].sort((a, b) => a - b).map(y => `<option value="${y}">${y}</option>`).join('');
+  sel.value = String(years.has(keep) ? keep : cur);
+}
+
 // ─── Init (wird nach erfolgreicher Passworteingabe aufgerufen) ─
 async function startApp() {
   const now = new Date();
   currentYear = now.getFullYear();
   currentMonth = now.getMonth();
-  document.getElementById('genYear').value = now.getFullYear();
   document.getElementById('genMonth').value = now.getMonth();
 
   setSyncStatus('Lade Daten…');
   await Promise.all([loadData(), loadRotData(), loadUrlaub(), loadSonstiges(), loadBereitschaft()]);
+  populateGenYears();
+  document.getElementById('genYear').value = String(now.getFullYear());
   setSyncStatus('✓ Verbunden mit Firestore', true);
 
   renderGrid();
